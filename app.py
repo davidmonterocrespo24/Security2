@@ -22,6 +22,12 @@ from modules.port_scanner import PortScanner
 from modules.bot_detector import BotDetector
 from modules.installer import SystemInstaller
 from modules.threat_detector import ThreatDetector
+from modules.attack_detector import AttackDetector
+from modules.geo_intelligence import GeoIntelligence
+
+# Importar módulos de base de datos
+from database.db_manager import DatabaseManager
+from database.models import init_database
 
 # Cargar variables de entorno
 load_dotenv()
@@ -51,8 +57,12 @@ def load_user(user_id):
         return User(1, admin_username)
     return None
 
+# Inicializar base de datos
+init_database()
+
 # Inicializar managers
 config_manager = ConfigManager()
+db_manager = DatabaseManager()
 firewall_manager = FirewallManager()
 fail2ban_manager = Fail2banManager()
 log_analyzer = LogAnalyzer()
@@ -60,6 +70,95 @@ port_scanner = PortScanner()
 bot_detector = BotDetector()
 installer = SystemInstaller()
 threat_detector = ThreatDetector()
+
+# Inicializar módulos de seguridad avanzada
+attack_detector = AttackDetector(db_manager)
+geo_intelligence = GeoIntelligence(db_manager)
+
+
+# ==================== MIDDLEWARE DE SEGURIDAD ====================
+
+@app.before_request
+def security_middleware():
+    """Middleware para analizar todas las peticiones en busca de amenazas"""
+    # Excluir rutas estáticas
+    if request.path.startswith('/static/'):
+        return None
+
+    # Obtener IP del cliente
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if client_ip:
+        client_ip = client_ip.split(',')[0].strip()
+    else:
+        client_ip = request.remote_addr or 'unknown'
+
+    # Verificar si la IP está en whitelist
+    if db_manager.is_ip_whitelisted(client_ip):
+        return None
+
+    # Verificar si la IP está bloqueada
+    if db_manager.is_ip_blocked(client_ip):
+        db_manager.log_security_event(
+            event_type='blocked_access_attempt',
+            severity='medium',
+            source_ip=client_ip,
+            attack_vector='blocked_ip',
+            description=f'Intento de acceso desde IP bloqueada: {client_ip}',
+            request_path=request.path
+        )
+        return jsonify({'error': 'Access denied', 'message': 'Your IP has been blocked'}), 403
+
+    # Analizar petición HTTP en busca de ataques
+    user_agent = request.headers.get('User-Agent', '')
+    method = request.method
+    path = request.path
+
+    analysis = attack_detector.analyze_http_request(client_ip, method, path, user_agent)
+
+    if analysis['is_threat']:
+        # Registrar evento de seguridad
+        db_manager.log_security_event(
+            event_type='attack_detected',
+            severity=analysis['severity'],
+            source_ip=client_ip,
+            attack_vector=analysis.get('attack_type', 'unknown'),
+            description=analysis.get('description', 'Suspicious request detected'),
+            request_method=method,
+            request_path=path,
+            user_agent=user_agent,
+            details=json.dumps(analysis.get('details', {}))
+        )
+
+        # Bloqueo automático para amenazas críticas
+        if analysis['should_block']:
+            db_manager.block_ip(
+                ip_address=client_ip,
+                reason=f"Auto-blocked: {analysis.get('attack_type', 'threat')}",
+                blocked_by='auto',
+                duration_hours=24
+            )
+
+            db_manager.create_alert(
+                alert_type='auto_block',
+                severity='high',
+                title=f'IP bloqueada automáticamente: {client_ip}',
+                message=f"Tipo de ataque: {analysis.get('attack_type', 'unknown')}",
+                source_ip=client_ip
+            )
+
+            return jsonify({'error': 'Access denied', 'message': 'Suspicious activity detected'}), 403
+
+        # Crear alerta para amenazas que requieren revisión manual
+        elif analysis['severity'] in ['medium', 'high']:
+            db_manager.create_alert(
+                alert_type='suspicious_activity',
+                severity=analysis['severity'],
+                title=f'Actividad sospechosa detectada: {client_ip}',
+                message=f"Tipo: {analysis.get('attack_type', 'unknown')} - Path: {path}",
+                source_ip=client_ip
+            )
+
+    return None
 
 
 # ==================== AUTENTICACIÓN ====================
@@ -188,9 +287,14 @@ def install_system():
 @login_required
 def get_dashboard_stats():
     """Obtener estadísticas del dashboard"""
+    db_stats = db_manager.get_dashboard_stats()
+
     stats = {
-        'blocked_ips': fail2ban_manager.get_blocked_ips_count(),
-        'active_threats': threat_detector.get_active_threats_count(),
+        'blocked_ips': db_stats.get('total_blocked_ips', 0),
+        'active_threats': db_stats.get('active_threats', 0),
+        'total_events_24h': db_stats.get('total_events_24h', 0),
+        'critical_events_24h': db_stats.get('critical_events_24h', 0),
+        'pending_alerts': db_stats.get('pending_alerts', 0),
         'open_ports': port_scanner.get_open_ports_count(),
         'firewall_rules': firewall_manager.get_rules_count(),
         'failed_ssh_attempts': log_analyzer.get_failed_ssh_count(),
@@ -458,6 +562,180 @@ def list_ports():
     """Listar puertos abiertos"""
     ports = port_scanner.get_open_ports()
     return jsonify({'ports': ports})
+
+
+# --- Gestión de Eventos de Seguridad ---
+@app.route('/api/security/events', methods=['GET'])
+@login_required
+def get_security_events():
+    """Obtener eventos de seguridad"""
+    limit = request.args.get('limit', 100, type=int)
+    severity = request.args.get('severity')
+    event_type = request.args.get('event_type')
+
+    events = db_manager.get_security_events(limit=limit, severity=severity, event_type=event_type)
+    return jsonify({'events': events})
+
+
+@app.route('/api/security/events/<int:event_id>', methods=['GET'])
+@login_required
+def get_security_event(event_id):
+    """Obtener detalles de un evento de seguridad"""
+    event = db_manager.get_event_by_id(event_id)
+    if event:
+        return jsonify({'success': True, 'event': event})
+    return jsonify({'success': False, 'error': 'Event not found'}), 404
+
+
+# --- Gestión de IPs Bloqueadas ---
+@app.route('/api/security/blocked-ips', methods=['GET'])
+@login_required
+def get_blocked_ips_api():
+    """Obtener lista de IPs bloqueadas"""
+    blocked_ips = db_manager.get_blocked_ips()
+    return jsonify({'blocked_ips': blocked_ips})
+
+
+@app.route('/api/security/block-ip', methods=['POST'])
+@login_required
+def block_ip_manual():
+    """Bloquear IP manualmente"""
+    data = request.json
+    ip_address = data.get('ip_address')
+    reason = data.get('reason', 'Manual block')
+    duration_hours = data.get('duration_hours', 24)
+
+    if not ip_address:
+        return jsonify({'success': False, 'error': 'IP address required'}), 400
+
+    result = db_manager.block_ip(
+        ip_address=ip_address,
+        reason=reason,
+        blocked_by=current_user.username,
+        duration_hours=duration_hours
+    )
+
+    return jsonify({'success': result})
+
+
+@app.route('/api/security/unblock-ip', methods=['POST'])
+@login_required
+def unblock_ip_api():
+    """Desbloquear IP"""
+    data = request.json
+    ip_address = data.get('ip_address')
+
+    if not ip_address:
+        return jsonify({'success': False, 'error': 'IP address required'}), 400
+
+    result = db_manager.unblock_ip(ip_address)
+    return jsonify({'success': result})
+
+
+# --- Gestión de Alertas ---
+@app.route('/api/alerts', methods=['GET'])
+@login_required
+def get_alerts():
+    """Obtener alertas"""
+    status = request.args.get('status', 'pending')
+    severity = request.args.get('severity')
+    limit = request.args.get('limit', 50, type=int)
+
+    alerts = db_manager.get_alerts(status=status, severity=severity, limit=limit)
+    return jsonify({'alerts': alerts})
+
+
+@app.route('/api/alerts/<int:alert_id>/resolve', methods=['POST'])
+@login_required
+def resolve_alert(alert_id):
+    """Marcar alerta como resuelta"""
+    data = request.json
+    resolution_notes = data.get('resolution_notes', '')
+
+    result = db_manager.resolve_alert(alert_id, current_user.username, resolution_notes)
+    return jsonify({'success': result})
+
+
+@app.route('/api/alerts/<int:alert_id>/dismiss', methods=['POST'])
+@login_required
+def dismiss_alert(alert_id):
+    """Descartar alerta"""
+    result = db_manager.dismiss_alert(alert_id)
+    return jsonify({'success': result})
+
+
+# --- Análisis de IP ---
+@app.route('/api/security/analyze-ip/<ip_address>', methods=['GET'])
+@login_required
+def analyze_ip(ip_address):
+    """Analizar IP completa (geo, reputación, historial)"""
+    enriched_data = geo_intelligence.enrich_ip_data(ip_address)
+    return jsonify(enriched_data)
+
+
+# --- Estadísticas de Ataques ---
+@app.route('/api/security/attack-stats', methods=['GET'])
+@login_required
+def get_attack_stats():
+    """Obtener estadísticas de ataques"""
+    hours = request.args.get('hours', 24, type=int)
+    stats = db_manager.get_attack_statistics(hours=hours)
+    return jsonify(stats)
+
+
+# --- Whitelist / Blacklist ---
+@app.route('/api/security/whitelist', methods=['GET'])
+@login_required
+def get_whitelist():
+    """Obtener whitelist de IPs"""
+    whitelist = db_manager.get_whitelist()
+    return jsonify({'whitelist': whitelist})
+
+
+@app.route('/api/security/whitelist', methods=['POST'])
+@login_required
+def add_to_whitelist():
+    """Agregar IP a whitelist"""
+    data = request.json
+    ip_address = data.get('ip_address')
+    reason = data.get('reason', '')
+
+    if not ip_address:
+        return jsonify({'success': False, 'error': 'IP address required'}), 400
+
+    result = db_manager.add_to_whitelist(ip_address, reason, current_user.username)
+    return jsonify({'success': result})
+
+
+@app.route('/api/security/whitelist/<ip_address>', methods=['DELETE'])
+@login_required
+def remove_from_whitelist(ip_address):
+    """Eliminar IP de whitelist"""
+    result = db_manager.remove_from_whitelist(ip_address)
+    return jsonify({'success': result})
+
+
+@app.route('/api/security/blacklist', methods=['GET'])
+@login_required
+def get_blacklist():
+    """Obtener blacklist de IPs"""
+    blacklist = db_manager.get_blacklist()
+    return jsonify({'blacklist': blacklist})
+
+
+@app.route('/api/security/blacklist', methods=['POST'])
+@login_required
+def add_to_blacklist():
+    """Agregar IP a blacklist"""
+    data = request.json
+    ip_address = data.get('ip_address')
+    reason = data.get('reason', '')
+
+    if not ip_address:
+        return jsonify({'success': False, 'error': 'IP address required'}), 400
+
+    result = db_manager.add_to_blacklist(ip_address, reason, current_user.username)
+    return jsonify({'success': result})
 
 
 # ==================== MANEJO DE ERRORES ====================

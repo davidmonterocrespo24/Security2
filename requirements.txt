@@ -7,3 +7,6 @@ requests==2.31.0
 # python-iptables==1.0.1  # Solo para Linux/Ubuntu
 watchdog==3.0.0
 werkzeug==3.0.1
+SQLAlchemy==2.0.23
+bcrypt==4.1.2
+pyotp==2.9.0
