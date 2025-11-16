@@ -243,10 +243,55 @@
 
                 const result = await response.json();
 
+                // Mostrar información de la plataforma
+                if (result.platform === 'Windows') {
+                    const warningDiv = document.createElement('div');
+                    warningDiv.className = 'bg-yellow-50 border-l-4 border-yellow-600 p-4 mb-4';
+                    warningDiv.innerHTML = `
+                        <p class="text-yellow-800">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            <strong>Sistema Windows detectado:</strong> ${result.message}
+                        </p>
+                        <p class="text-yellow-700 text-sm mt-2">
+                            Para ejecutar las instalaciones reales, necesitas desplegar este sistema en un servidor Ubuntu Linux.
+                        </p>
+                    `;
+                    progressDiv.appendChild(warningDiv);
+                }
+
+                // Mostrar resultados detallados
+                if (result.results) {
+                    result.results.forEach(item => {
+                        const resultDiv = document.createElement('div');
+                        const isSuccess = item.result && item.result.success;
+                        const icon = isSuccess ? 'fa-check-circle text-green-600' : 'fa-exclamation-circle text-red-600';
+                        const message = item.result ? (item.result.message || item.result.output || 'Completado') : 'Error';
+
+                        resultDiv.className = 'flex items-start p-3 bg-gray-50 rounded-lg';
+                        resultDiv.innerHTML = `
+                            <i class="fas ${icon} mr-3 mt-1"></i>
+                            <div class="flex-1">
+                                <div class="font-semibold">${item.component}</div>
+                                <div class="text-sm text-gray-600">${message}</div>
+                            </div>
+                        `;
+                        progressDiv.appendChild(resultDiv);
+                    });
+                }
+
                 document.getElementById('installation-complete').classList.remove('hidden');
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error durante la instalación. Por favor, verifica los logs.');
+
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'bg-red-50 border-l-4 border-red-600 p-4 mb-4';
+                errorDiv.innerHTML = `
+                    <p class="text-red-800">
+                        <i class="fas fa-times-circle mr-2"></i>
+                        Error durante la instalación: ${error.message}
+                    </p>
+                `;
+                progressDiv.appendChild(errorDiv);
             }
         }
 

@@ -3,12 +3,15 @@ Instalador de Componentes del Sistema
 """
 import subprocess
 import os
+import platform
 from .config_manager import ConfigManager
 
 
 class SystemInstaller:
     def __init__(self):
         self.config_manager = ConfigManager()
+        self.is_linux = platform.system() == 'Linux'
+        self.is_windows = platform.system() == 'Windows'
 
     def _run_command(self, command):
         """Ejecutar comando del sistema"""
@@ -74,6 +77,25 @@ class SystemInstaller:
         """Instalar componentes necesarios"""
         results = []
 
+        # Verificar si estamos en Windows
+        if self.is_windows:
+            # Solo guardar configuración en Windows
+            self.config_manager.save_config(config)
+            self.config_manager.mark_as_installed()
+
+            return {
+                'success': True,
+                'platform': 'Windows',
+                'message': 'Configuración guardada. Este sistema está diseñado para Ubuntu Linux. Los comandos de instalación no se ejecutarán en Windows.',
+                'results': [{
+                    'component': 'Configuration',
+                    'result': {
+                        'success': True,
+                        'message': 'Configuración guardada correctamente'
+                    }
+                }]
+            }
+
         # Actualizar configuración
         self.config_manager.save_config(config)
 
@@ -115,6 +137,7 @@ class SystemInstaller:
 
         return {
             'success': True,
+            'platform': 'Linux',
             'results': results
         }
 

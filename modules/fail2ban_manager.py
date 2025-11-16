@@ -13,11 +13,50 @@ class Fail2banManager:
 
     def _check_fail2ban_available(self):
         """Verificar si Fail2ban está disponible"""
+        # Intentar múltiples métodos de detección
         try:
+            # Método 1: which
             result = subprocess.run(['which', 'fail2ban-client'], capture_output=True, text=True)
-            return result.returncode == 0
+            if result.returncode == 0:
+                return True
         except:
-            return False
+            pass
+
+        try:
+            # Método 2: verificar rutas comunes
+            common_paths = [
+                '/usr/bin/fail2ban-client',
+                '/usr/local/bin/fail2ban-client',
+                '/bin/fail2ban-client'
+            ]
+            for path in common_paths:
+                if os.path.exists(path):
+                    self.fail2ban_client = path
+                    return True
+        except:
+            pass
+
+        try:
+            # Método 3: intentar ejecutar directamente
+            result = subprocess.run(['fail2ban-client', '--version'],
+                                  capture_output=True, text=True, timeout=2)
+            if result.returncode == 0:
+                return True
+        except:
+            pass
+
+        try:
+            # Método 4: verificar con systemctl
+            result = subprocess.run(['systemctl', 'is-active', 'fail2ban'],
+                                  capture_output=True, text=True, timeout=2)
+            if result.returncode == 0:
+                # Si el servicio está activo, fail2ban está instalado
+                self.fail2ban_client = '/usr/bin/fail2ban-client'
+                return True
+        except:
+            pass
+
+        return False
 
     def _run_command(self, command):
         """Ejecutar comando del sistema"""
@@ -57,7 +96,7 @@ class Fail2banManager:
         if not self.fail2ban_available:
             return []
 
-        result = self._run_command('sudo fail2ban-client status')
+        result = self._run_command(f'sudo {self.fail2ban_client} status')
         if not result['success']:
             return []
 
@@ -85,7 +124,7 @@ class Fail2banManager:
         if not self.fail2ban_available:
             return None
 
-        result = self._run_command(f'sudo fail2ban-client status {jail_name}')
+        result = self._run_command(f'sudo {self.fail2ban_client} status {jail_name}')
         if not result['success']:
             return None
 
@@ -170,7 +209,7 @@ class Fail2banManager:
         if not self.fail2ban_available:
             return {'success': False, 'error': 'Fail2ban no disponible'}
 
-        command = f'sudo fail2ban-client set {jail} banip {ip}'
+        command = f'sudo {self.fail2ban_client} set {jail} banip {ip}'
         result = self._run_command(command)
         return result
 
@@ -179,7 +218,7 @@ class Fail2banManager:
         if not self.fail2ban_available:
             return {'success': False, 'error': 'Fail2ban no disponible'}
 
-        command = f'sudo fail2ban-client set {jail} unbanip {ip}'
+        command = f'sudo {self.fail2ban_client} set {jail} unbanip {ip}'
         result = self._run_command(command)
         return result
 
@@ -189,7 +228,7 @@ class Fail2banManager:
             return {'success': False, 'error': 'Fail2ban no disponible'}
 
         action = 'start' if enable else 'stop'
-        command = f'sudo fail2ban-client {action} {jail}'
+        command = f'sudo {self.fail2ban_client} {action} {jail}'
         result = self._run_command(command)
         return result
 
@@ -198,7 +237,7 @@ class Fail2banManager:
         if not self.fail2ban_available:
             return {'success': False, 'error': 'Fail2ban no disponible'}
 
-        command = 'sudo fail2ban-client reload'
+        command = f'sudo {self.fail2ban_client} reload'
         result = self._run_command(command)
         return result
 
