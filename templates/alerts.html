@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block title %}Alertas de Seguridad - Sistema de Seguridad{% endblock %}
+{% block header %}Gestión de Alertas{% endblock %}
+
+{% block content %}
+<!-- Filter Bar -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+            <select id="filter-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="pending">Pendientes</option>
+                <option value="resolved">Resueltas</option>
+                <option value="dismissed">Descartadas</option>
+                <option value="all">Todas</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Severidad</label>
+            <select id="filter-severity" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todas</option>
+                <option value="critical">Crítica</option>
+                <option value="high">Alta</option>
+                <option value="medium">Media</option>
+                <option value="low">Baja</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+            <select id="filter-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todos</option>
+                <option value="auto_block">Bloqueo Automático</option>
+                <option value="suspicious_activity">Actividad Sospechosa</option>
+                <option value="brute_force">Fuerza Bruta</option>
+                <option value="sql_injection">SQL Injection</option>
+                <option value="xss">XSS</option>
+            </select>
+        </div>
+        <div class="flex items-end">
+            <button onclick="loadAlerts()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                <i class="fas fa-filter mr-2"></i>
+                Filtrar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Alerts Summary -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Críticas</p>
+                <p class="text-3xl font-bold text-gray-800" id="critical-alerts">0</p>
+            </div>
+            <i class="fas fa-exclamation-circle text-red-500 text-3xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Altas</p>
+                <p class="text-3xl font-bold text-gray-800" id="high-alerts">0</p>
+            </div>
+            <i class="fas fa-exclamation-triangle text-orange-500 text-3xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Medias</p>
+                <p class="text-3xl font-bold text-gray-800" id="medium-alerts">0</p>
+            </div>
+            <i class="fas fa-info-circle text-yellow-500 text-3xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Resueltas Hoy</p>
+                <p class="text-3xl font-bold text-gray-800" id="resolved-today">0</p>
+            </div>
+            <i class="fas fa-check-circle text-green-500 text-3xl"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Alerts List -->
+<div class="bg-white rounded-lg shadow-md p-6">
+    <h3 class="text-xl font-bold mb-4 flex items-center justify-between">
+        <span>
+            <i class="fas fa-bell mr-2 text-blue-600"></i>
+            Alertas
+        </span>
+        <button onclick="markAllAsRead()" class="text-sm px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+            <i class="fas fa-eye mr-1"></i>
+            Marcar todas como leídas
+        </button>
+    </h3>
+
+    <div id="alerts-container" class="space-y-3">
+        <!-- Se llenará dinámicamente -->
+    </div>
+</div>
+
+<!-- Alert Detail Modal -->
+<div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-xl font-bold" id="modal-title">Detalles de la Alerta</h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+
+            <div id="modal-content" class="space-y-4">
+                <!-- Se llenará dinámicamente -->
+            </div>
+
+            <div class="mt-6 flex gap-3">
+                <button onclick="resolveAlert()" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                    <i class="fas fa-check mr-2"></i>
+                    Resolver
+                </button>
+                <button onclick="dismissAlert()" class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
+                    <i class="fas fa-times mr-2"></i>
+                    Descartar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentAlertId = null;
+
+async function loadAlerts() {
+    const status = document.getElementById('filter-status').value;
+    const severity = document.getElementById('filter-severity').value;
+    const type = document.getElementById('filter-type').value;
+
+    try {
+        let url = `/api/alerts?status=${status}&limit=50`;
+        if (severity) url += `&severity=${severity}`;
+        if (type) url += `&type=${type}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        displayAlerts(data.alerts || []);
+        updateAlertsSummary(data.alerts || []);
+
+    } catch (error) {
+        console.error('Error loading alerts:', error);
+        showNotification('Error al cargar alertas', 'error');
+    }
+}
+
+function displayAlerts(alerts) {
+    const container = document.getElementById('alerts-container');
+    container.innerHTML = '';
+
+    if (!alerts || alerts.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">No hay alertas con los filtros seleccionados</p>';
+        return;
+    }
+
+    alerts.forEach(alert => {
+        const severityColors = {
+            critical: 'border-red-500 bg-red-50',
+            high: 'border-orange-500 bg-orange-50',
+            medium: 'border-yellow-500 bg-yellow-50',
+            low: 'border-blue-500 bg-blue-50'
+        };
+
+        const severityBadges = {
+            critical: 'bg-red-500 text-white',
+            high: 'bg-orange-500 text-white',
+            medium: 'bg-yellow-500 text-white',
+            low: 'bg-blue-500 text-white'
+        };
+
+        const color = severityColors[alert.severity] || severityColors.low;
+        const badge = severityBadges[alert.severity] || severityBadges.low;
+
+        const isUnread = !alert.is_read;
+
+        const div = document.createElement('div');
+        div.className = `p-4 rounded-lg border-l-4 ${color} cursor-pointer hover:shadow-md transition ${isUnread ? 'font-semibold' : ''}`;
+        div.onclick = () => showAlertDetails(alert);
+
+        div.innerHTML = `
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                        ${isUnread ? '<span class="w-2 h-2 bg-blue-600 rounded-full"></span>' : ''}
+                        <span class="px-2 py-1 ${badge} rounded-full text-xs uppercase">${alert.severity}</span>
+                        <span class="text-xs text-gray-500">${alert.alert_type}</span>
+                    </div>
+                    <h4 class="text-lg font-bold">${alert.title}</h4>
+                    <p class="text-sm text-gray-700 mt-1">${alert.message}</p>
+                </div>
+                ${alert.is_resolved ?
+                    '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Resuelta</span>' :
+                    alert.status === 'dismissed' ?
+                    '<span class="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">Descartada</span>' :
+                    ''
+                }
+            </div>
+            <div class="flex justify-between items-center text-xs text-gray-500 mt-2">
+                <span><i class="fas fa-clock mr-1"></i>${formatTimestamp(alert.created_at)}</span>
+                ${alert.source ? `<span><i class="fas fa-map-marker-alt mr-1"></i>${alert.source}</span>` : ''}
+            </div>
+        `;
+
+        container.appendChild(div);
+    });
+}
+
+function updateAlertsSummary(alerts) {
+    const critical = alerts.filter(a => a.severity === 'critical' && !a.is_resolved).length;
+    const high = alerts.filter(a => a.severity === 'high' && !a.is_resolved).length;
+    const medium = alerts.filter(a => a.severity === 'medium' && !a.is_resolved).length;
+
+    const today = new Date().toISOString().split('T')[0];
+    const resolvedToday = alerts.filter(a => {
+        if (!a.resolved_at) return false;
+        const resolvedDate = a.resolved_at.split('T')[0];
+        return resolvedDate === today;
+    }).length;
+
+    document.getElementById('critical-alerts').textContent = critical;
+    document.getElementById('high-alerts').textContent = high;
+    document.getElementById('medium-alerts').textContent = medium;
+    document.getElementById('resolved-today').textContent = resolvedToday;
+}
+
+function showAlertDetails(alert) {
+    currentAlertId = alert.id;
+
+    const modal = document.getElementById('alert-modal');
+    const content = document.getElementById('modal-content');
+
+    const severityBadges = {
+        critical: 'bg-red-500 text-white',
+        high: 'bg-orange-500 text-white',
+        medium: 'bg-yellow-500 text-white',
+        low: 'bg-blue-500 text-white'
+    };
+
+    const badge = severityBadges[alert.severity] || severityBadges.low;
+
+    content.innerHTML = `
+        <div class="space-y-3">
+            <div>
+                <label class="text-sm font-medium text-gray-600">Severidad</label>
+                <div class="mt-1">
+                    <span class="px-3 py-1 ${badge} rounded-full text-sm uppercase">${alert.severity}</span>
+                </div>
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-600">Tipo de Alerta</label>
+                <p class="mt-1 text-gray-900">${alert.alert_type}</p>
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-600">Título</label>
+                <p class="mt-1 text-gray-900 font-bold">${alert.title}</p>
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-600">Mensaje</label>
+                <p class="mt-1 text-gray-900">${alert.message}</p>
+            </div>
+            ${alert.source ? `
+            <div>
+                <label class="text-sm font-medium text-gray-600">IP Origen</label>
+                <p class="mt-1 text-gray-900 font-mono">${alert.source}</p>
+                <button onclick="analyzeIP('${alert.source}')" class="mt-2 text-sm text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-search mr-1"></i>
+                    Analizar IP
+                </button>
+            </div>
+            ` : ''}
+            <div>
+                <label class="text-sm font-medium text-gray-600">Fecha de Creación</label>
+                <p class="mt-1 text-gray-900">${formatTimestamp(alert.created_at)}</p>
+            </div>
+            ${alert.is_resolved ? `
+            <div class="bg-green-50 p-3 rounded-lg">
+                <label class="text-sm font-medium text-green-800">Estado: Resuelta</label>
+                <p class="mt-1 text-sm text-green-700">Resuelto por: ${alert.resolved_by || 'Sistema'}</p>
+                <p class="text-sm text-green-700">Fecha: ${formatTimestamp(alert.resolved_at)}</p>
+                ${alert.action_taken ? `<p class="mt-2 text-sm text-green-700">Acción: ${alert.action_taken}</p>` : ''}
+            </div>
+            ` : ''}
+        </div>
+
+        ${!alert.is_resolved ? `
+        <div class="mt-4">
+            <label class="text-sm font-medium text-gray-600">Notas de Resolución</label>
+            <textarea id="resolution-notes" rows="3"
+                class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Describe las acciones tomadas para resolver esta alerta..."></textarea>
+        </div>
+        ` : ''}
+    `;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeModal() {
+    const modal = document.getElementById('alert-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    currentAlertId = null;
+}
+
+async function resolveAlert() {
+    if (!currentAlertId) return;
+
+    const notes = document.getElementById('resolution-notes')?.value || '';
+
+    try {
+        const response = await fetch(`/api/alerts/${currentAlertId}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resolution_notes: notes })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('Alerta resuelta exitosamente', 'success');
+            closeModal();
+            loadAlerts();
+        } else {
+            showNotification('Error al resolver alerta', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al resolver alerta', 'error');
+    }
+}
+
+async function dismissAlert() {
+    if (!currentAlertId) return;
+
+    if (!confirm('¿Descartar esta alerta?')) return;
+
+    try {
+        const response = await fetch(`/api/alerts/${currentAlertId}/dismiss`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('Alerta descartada', 'success');
+            closeModal();
+            loadAlerts();
+        } else {
+            showNotification('Error al descartar alerta', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al descartar alerta', 'error');
+    }
+}
+
+async function markAllAsRead() {
+    // TODO: Implement mark all as read endpoint
+    showNotification('Función no implementada aún', 'info');
+}
+
+function analyzeIP(ip) {
+    window.location.href = `/ip-analysis?ip=${ip}`;
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return 'Desconocido';
+    const date = new Date(timestamp);
+    return date.toLocaleString('es-ES');
+}
+
+// Load alerts on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadAlerts();
+    // Refresh every 30 seconds
+    setInterval(loadAlerts, 30000);
+});
+
+// Close modal when clicking outside
+document.getElementById('alert-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'alert-modal') {
+        closeModal();
+    }
+});
+</script>
+{% endblock %}

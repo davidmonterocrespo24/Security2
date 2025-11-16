@@ -1,0 +1,572 @@
+{% extends "base.html" %}
+
+{% block title %}Análisis de IP - Sistema de Seguridad{% endblock %}
+{% block header %}Análisis de IP{% endblock %}
+
+{% block content %}
+<!-- Search Bar -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="flex gap-4">
+        <div class="flex-1">
+            <input type="text" id="ip-search" placeholder="Ingrese una dirección IP para analizar..."
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <button onclick="analyzeIP()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+            <i class="fas fa-search mr-2"></i>
+            Analizar
+        </button>
+    </div>
+</div>
+
+<!-- Analysis Results -->
+<div id="analysis-results" class="hidden">
+    <!-- IP Overview -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h3 class="text-2xl font-bold mb-4 flex items-center justify-between">
+            <span>
+                <i class="fas fa-network-wired mr-2 text-blue-600"></i>
+                <span id="ip-address" class="font-mono"></span>
+            </span>
+            <div id="ip-status-badge"></div>
+        </h3>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                <p class="text-sm text-gray-600 mb-1">Reputation Score</p>
+                <p class="text-3xl font-bold" id="reputation-score">0</p>
+                <div id="reputation-bar" class="mt-2 w-full bg-gray-200 rounded-full h-2">
+                    <div class="h-2 rounded-full"></div>
+                </div>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                <p class="text-sm text-gray-600 mb-1">Total Eventos</p>
+                <p class="text-3xl font-bold text-purple-600" id="total-events">0</p>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                <p class="text-sm text-gray-600 mb-1">Eventos Críticos</p>
+                <p class="text-3xl font-bold text-red-600" id="critical-events-count">0</p>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                <p class="text-sm text-gray-600 mb-1">Estado</p>
+                <p class="text-sm font-bold mt-2" id="ip-blocked-status">-</p>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                <p class="text-sm text-gray-600 mb-1">Tipo</p>
+                <p class="text-sm font-bold mt-2" id="ip-type">Regular</p>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3">
+            <button id="btn-block" onclick="blockThisIP()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                <i class="fas fa-ban mr-2"></i>
+                Bloquear IP
+            </button>
+            <button id="btn-unblock" onclick="unblockThisIP()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition hidden">
+                <i class="fas fa-unlock mr-2"></i>
+                Desbloquear IP
+            </button>
+            <button onclick="addToWhitelist()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                <i class="fas fa-shield-alt mr-2"></i>
+                Agregar a Whitelist
+            </button>
+            <button onclick="addToBlacklist()" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition">
+                <i class="fas fa-list mr-2"></i>
+                Agregar a Blacklist
+            </button>
+        </div>
+    </div>
+
+    <!-- Geo Information and Threat Data -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Geo Information -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-globe mr-2 text-blue-600"></i>
+                Información Geográfica
+            </h3>
+            <div id="geo-info" class="space-y-3">
+                <!-- Se llenará dinámicamente -->
+            </div>
+            <div id="ip-map" class="mt-4 h-64 bg-gray-100 rounded-lg"></div>
+        </div>
+
+        <!-- Threat Intelligence -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-shield-alt mr-2 text-blue-600"></i>
+                Threat Intelligence
+            </h3>
+            <div id="threat-info" class="space-y-3">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Attack History -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-history mr-2 text-blue-600"></i>
+            Historial de Ataques
+        </h3>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vector</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severidad</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descripción</th>
+                    </tr>
+                </thead>
+                <tbody id="attack-history-table" class="bg-white divide-y divide-gray-200">
+                    <!-- Se llenará dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- WHOIS Information (Future) -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-info-circle mr-2 text-blue-600"></i>
+            Información Adicional
+        </h3>
+        <div id="additional-info" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+</div>
+
+<!-- No Results Message -->
+<div id="no-results" class="bg-white rounded-lg shadow-md p-12 text-center hidden">
+    <i class="fas fa-search text-gray-300 text-6xl mb-4"></i>
+    <p class="text-gray-500 text-lg">Ingrese una dirección IP para comenzar el análisis</p>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Leaflet for maps -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+let currentIP = null;
+let ipMap = null;
+
+async function analyzeIP() {
+    const ipInput = document.getElementById('ip-search');
+    const ip = ipInput.value.trim();
+
+    if (!ip) {
+        showNotification('Por favor ingrese una dirección IP', 'warning');
+        return;
+    }
+
+    // Validate IP format (basic)
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipRegex.test(ip)) {
+        showNotification('Formato de IP inválido', 'error');
+        return;
+    }
+
+    currentIP = ip;
+    showNotification('Analizando IP...', 'info');
+
+    try {
+        const response = await fetch(`/api/security/analyze-ip/${ip}`);
+        const data = await response.json();
+
+        displayAnalysisResults(data);
+
+    } catch (error) {
+        console.error('Error analyzing IP:', error);
+        showNotification('Error al analizar IP', 'error');
+    }
+}
+
+function displayAnalysisResults(data) {
+    document.getElementById('analysis-results').classList.remove('hidden');
+    document.getElementById('no-results').classList.add('hidden');
+
+    // Set IP address
+    document.getElementById('ip-address').textContent = data.ip_address;
+
+    // Set status badge
+    const statusBadge = document.getElementById('ip-status-badge');
+    if (data.is_currently_blocked) {
+        statusBadge.innerHTML = '<span class="px-4 py-2 bg-red-500 text-white rounded-full text-sm font-bold">BLOQUEADA</span>';
+        document.getElementById('btn-block').classList.add('hidden');
+        document.getElementById('btn-unblock').classList.remove('hidden');
+    } else if (data.is_whitelisted) {
+        statusBadge.innerHTML = '<span class="px-4 py-2 bg-green-500 text-white rounded-full text-sm font-bold">WHITELIST</span>';
+        document.getElementById('btn-block').classList.add('hidden');
+        document.getElementById('btn-unblock').classList.add('hidden');
+    } else if (data.is_blacklisted) {
+        statusBadge.innerHTML = '<span class="px-4 py-2 bg-gray-800 text-white rounded-full text-sm font-bold">BLACKLIST</span>';
+    } else {
+        statusBadge.innerHTML = '<span class="px-4 py-2 bg-blue-500 text-white rounded-full text-sm font-bold">ACTIVA</span>';
+        document.getElementById('btn-block').classList.remove('hidden');
+        document.getElementById('btn-unblock').classList.add('hidden');
+    }
+
+    // Reputation score
+    const repScore = data.reputation_score || 0;
+    document.getElementById('reputation-score').textContent = repScore;
+
+    const repBar = document.getElementById('reputation-bar').querySelector('div');
+    const repColor = repScore > 70 ? 'bg-red-500' : repScore > 40 ? 'bg-orange-500' : repScore > 20 ? 'bg-yellow-500' : 'bg-green-500';
+    repBar.className = `h-2 rounded-full ${repColor}`;
+    repBar.style.width = `${repScore}%`;
+
+    // Event counts
+    const events = data.attack_history || [];
+    document.getElementById('total-events').textContent = events.length;
+    document.getElementById('critical-events-count').textContent = events.filter(e => e.severity === 'critical').length;
+
+    // Blocked status
+    document.getElementById('ip-blocked-status').textContent = data.is_currently_blocked ? 'Bloqueada' : 'Activa';
+
+    // IP Type
+    let ipType = 'Regular';
+    if (data.is_vpn_proxy) ipType = 'VPN/Proxy';
+    else if (data.is_cloud) ipType = 'Cloud Provider';
+    document.getElementById('ip-type').textContent = ipType;
+
+    // Geo info
+    displayGeoInfo(data.geo_info);
+
+    // Threat info
+    displayThreatInfo(data.threat_data);
+
+    // Attack history
+    displayAttackHistory(data.attack_history || []);
+
+    // Additional info
+    displayAdditionalInfo(data);
+}
+
+function displayGeoInfo(geoInfo) {
+    const container = document.getElementById('geo-info');
+
+    if (!geoInfo) {
+        container.innerHTML = '<p class="text-gray-500">No hay información geográfica disponible</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+                <span class="font-medium text-gray-600">País:</span>
+                <span class="ml-2">${geoInfo.country || 'Desconocido'}</span>
+            </div>
+            <div>
+                <span class="font-medium text-gray-600">Región:</span>
+                <span class="ml-2">${geoInfo.region || 'Desconocido'}</span>
+            </div>
+            <div>
+                <span class="font-medium text-gray-600">Ciudad:</span>
+                <span class="ml-2">${geoInfo.city || 'Desconocido'}</span>
+            </div>
+            <div>
+                <span class="font-medium text-gray-600">Código País:</span>
+                <span class="ml-2">${geoInfo.country_code || 'N/A'}</span>
+            </div>
+            <div class="col-span-2">
+                <span class="font-medium text-gray-600">ISP:</span>
+                <span class="ml-2">${geoInfo.isp || 'Desconocido'}</span>
+            </div>
+            <div class="col-span-2">
+                <span class="font-medium text-gray-600">Organización:</span>
+                <span class="ml-2">${geoInfo.org || 'Desconocido'}</span>
+            </div>
+            <div>
+                <span class="font-medium text-gray-600">Latitud:</span>
+                <span class="ml-2">${geoInfo.lat || 'N/A'}</span>
+            </div>
+            <div>
+                <span class="font-medium text-gray-600">Longitud:</span>
+                <span class="ml-2">${geoInfo.lon || 'N/A'}</span>
+            </div>
+        </div>
+    `;
+
+    // Initialize map
+    if (geoInfo.lat && geoInfo.lon) {
+        initializeIPMap(geoInfo.lat, geoInfo.lon, geoInfo.country);
+    }
+}
+
+function initializeIPMap(lat, lon, country) {
+    const mapContainer = document.getElementById('ip-map');
+
+    if (ipMap) {
+        ipMap.remove();
+    }
+
+    ipMap = L.map('ip-map').setView([lat, lon], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(ipMap);
+
+    L.marker([lat, lon]).addTo(ipMap)
+        .bindPopup(`<b>${country || 'Location'}</b><br>IP: ${currentIP}`)
+        .openPopup();
+}
+
+function displayThreatInfo(threatData) {
+    const container = document.getElementById('threat-info');
+
+    if (!threatData) {
+        container.innerHTML = '<p class="text-gray-500">No hay información de amenazas disponible</p>';
+        return;
+    }
+
+    const isAbusive = threatData.is_abusive;
+    const abuseScore = threatData.abuse_score || 0;
+
+    container.innerHTML = `
+        <div class="space-y-4">
+            <div class="p-4 rounded-lg ${isAbusive ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}">
+                <p class="font-bold ${isAbusive ? 'text-red-800' : 'text-green-800'}">
+                    ${isAbusive ? '⚠️ IP Abusiva Detectada' : '✓ No se detectaron abusos'}
+                </p>
+                <p class="text-sm mt-1 ${isAbusive ? 'text-red-600' : 'text-green-600'}">
+                    Nivel de amenaza: ${abuseScore}/100
+                </p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                    <span class="font-medium text-gray-600">Total Reportes:</span>
+                    <span class="ml-2">${threatData.total_reports || 0}</span>
+                </div>
+                <div>
+                    <span class="font-medium text-gray-600">Whitelisted:</span>
+                    <span class="ml-2">${threatData.is_whitelisted ? 'Sí' : 'No'}</span>
+                </div>
+                <div class="col-span-2">
+                    <span class="font-medium text-gray-600">Eventos Alta Severidad:</span>
+                    <span class="ml-2 text-red-600 font-bold">${threatData.high_severity_events || 0}</span>
+                </div>
+                <div class="col-span-2">
+                    <span class="font-medium text-gray-600">Eventos Media Severidad:</span>
+                    <span class="ml-2 text-yellow-600 font-bold">${threatData.medium_severity_events || 0}</span>
+                </div>
+                ${threatData.last_reported ? `
+                <div class="col-span-2">
+                    <span class="font-medium text-gray-600">Último Reporte:</span>
+                    <span class="ml-2">${formatTimestamp(threatData.last_reported)}</span>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function displayAttackHistory(history) {
+    const tbody = document.getElementById('attack-history-table');
+    tbody.innerHTML = '';
+
+    if (!history || history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No hay historial de ataques</td></tr>';
+        return;
+    }
+
+    history.forEach(event => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${formatTimestamp(event.timestamp)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${event.event_type || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${event.attack_vector || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${getSeverityBadge(event.severity)}</td>
+            <td class="px-6 py-4 text-sm">${event.description || 'No description'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function displayAdditionalInfo(data) {
+    const container = document.getElementById('additional-info');
+
+    container.innerHTML = `
+        <div>
+            <span class="font-medium text-gray-600">VPN/Proxy:</span>
+            <span class="ml-2 ${data.is_vpn_proxy ? 'text-orange-600' : 'text-green-600'}">${data.is_vpn_proxy ? 'Sí' : 'No'}</span>
+        </div>
+        <div>
+            <span class="font-medium text-gray-600">Cloud Provider:</span>
+            <span class="ml-2 ${data.is_cloud ? 'text-blue-600' : 'text-gray-600'}">${data.is_cloud ? 'Sí' : 'No'}</span>
+        </div>
+        <div>
+            <span class="font-medium text-gray-600">País Bloqueado:</span>
+            <span class="ml-2 ${data.is_blocked_country ? 'text-red-600' : 'text-green-600'}">${data.is_blocked_country ? 'Sí' : 'No'}</span>
+        </div>
+        <div>
+            <span class="font-medium text-gray-600">En Whitelist:</span>
+            <span class="ml-2 ${data.is_whitelisted ? 'text-green-600' : 'text-gray-600'}">${data.is_whitelisted ? 'Sí' : 'No'}</span>
+        </div>
+        <div>
+            <span class="font-medium text-gray-600">En Blacklist:</span>
+            <span class="ml-2 ${data.is_blacklisted ? 'text-red-600' : 'text-gray-600'}">${data.is_blacklisted ? 'Sí' : 'No'}</span>
+        </div>
+        <div>
+            <span class="font-medium text-gray-600">Actualmente Bloqueada:</span>
+            <span class="ml-2 ${data.is_currently_blocked ? 'text-red-600 font-bold' : 'text-green-600'}">${data.is_currently_blocked ? 'Sí' : 'No'}</span>
+        </div>
+    `;
+}
+
+function getSeverityBadge(severity) {
+    const badges = {
+        critical: '<span class="px-2 py-1 bg-red-500 text-white rounded-full text-xs">Critical</span>',
+        high: '<span class="px-2 py-1 bg-orange-500 text-white rounded-full text-xs">High</span>',
+        medium: '<span class="px-2 py-1 bg-yellow-500 text-white rounded-full text-xs">Medium</span>',
+        low: '<span class="px-2 py-1 bg-blue-500 text-white rounded-full text-xs">Low</span>'
+    };
+    return badges[severity] || badges.low;
+}
+
+async function blockThisIP() {
+    if (!currentIP) return;
+
+    const reason = prompt('Razón del bloqueo:', 'Manual block from IP analysis');
+    if (!reason) return;
+
+    try {
+        const response = await fetch('/api/security/block-ip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ip_address: currentIP,
+                reason: reason,
+                duration_hours: 24
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`IP ${currentIP} bloqueada exitosamente`, 'success');
+            analyzeIP();
+        } else {
+            showNotification('Error al bloquear IP', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al bloquear IP', 'error');
+    }
+}
+
+async function unblockThisIP() {
+    if (!currentIP) return;
+
+    if (!confirm(`¿Desbloquear la IP ${currentIP}?`)) return;
+
+    try {
+        const response = await fetch('/api/security/unblock-ip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip_address: currentIP })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`IP ${currentIP} desbloqueada exitosamente`, 'success');
+            analyzeIP();
+        } else {
+            showNotification('Error al desbloquear IP', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al desbloquear IP', 'error');
+    }
+}
+
+async function addToWhitelist() {
+    if (!currentIP) return;
+
+    const reason = prompt('Razón para whitelist:', 'Trusted IP');
+    if (!reason) return;
+
+    try {
+        const response = await fetch('/api/security/whitelist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ip_address: currentIP,
+                reason: reason
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`IP ${currentIP} agregada a whitelist`, 'success');
+            analyzeIP();
+        } else {
+            showNotification('Error al agregar a whitelist', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al agregar a whitelist', 'error');
+    }
+}
+
+async function addToBlacklist() {
+    if (!currentIP) return;
+
+    const reason = prompt('Razón para blacklist:', 'Malicious IP');
+    if (!reason) return;
+
+    try {
+        const response = await fetch('/api/security/blacklist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ip_address: currentIP,
+                reason: reason
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`IP ${currentIP} agregada a blacklist`, 'success');
+            analyzeIP();
+        } else {
+            showNotification('Error al agregar a blacklist', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al agregar a blacklist', 'error');
+    }
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return 'Desconocido';
+    const date = new Date(timestamp);
+    return date.toLocaleString('es-ES');
+}
+
+// Check URL parameters on load
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ip = urlParams.get('ip');
+
+    if (ip) {
+        document.getElementById('ip-search').value = ip;
+        analyzeIP();
+    } else {
+        document.getElementById('no-results').classList.remove('hidden');
+    }
+});
+
+// Allow Enter key to search
+document.getElementById('ip-search').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        analyzeIP();
+    }
+});
+</script>
+{% endblock %}

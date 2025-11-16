@@ -75,6 +75,10 @@ threat_detector = ThreatDetector()
 attack_detector = AttackDetector(db_manager)
 geo_intelligence = GeoIntelligence(db_manager)
 
+# Inicializar detector ML
+from modules.ml_detector import MLTrafficDetector
+ml_detector = MLTrafficDetector(db_manager)
+
 
 # ==================== MIDDLEWARE DE SEGURIDAD ====================
 
@@ -251,6 +255,41 @@ def threats():
 def settings():
     """Página de configuración"""
     return render_template('settings.html')
+
+
+@app.route('/security-dashboard')
+@login_required
+def security_dashboard():
+    """Dashboard de seguridad avanzado"""
+    return render_template('security_dashboard.html')
+
+
+@app.route('/alerts')
+@login_required
+def alerts_page():
+    """Página de gestión de alertas"""
+    return render_template('alerts.html')
+
+
+@app.route('/ip-analysis')
+@login_required
+def ip_analysis_page():
+    """Página de análisis de IPs"""
+    return render_template('ip_analysis.html')
+
+
+@app.route('/ml-training')
+@login_required
+def ml_training_page():
+    """Página de entrenamiento ML"""
+    return render_template('ml_training.html')
+
+
+@app.route('/ml-suggestions')
+@login_required
+def ml_suggestions_page():
+    """Página de sugerencias ML"""
+    return render_template('ml_suggestions.html')
 
 
 # ==================== API ENDPOINTS ====================
@@ -736,6 +775,64 @@ def add_to_blacklist():
 
     result = db_manager.add_to_blacklist(ip_address, reason, current_user.username)
     return jsonify({'success': result})
+
+
+# --- Machine Learning ---
+@app.route('/api/ml/train', methods=['POST'])
+@login_required
+def train_ml_model():
+    """Entrenar modelo de Machine Learning"""
+    data = request.json
+    days_back = data.get('days_back', 30)
+    test_size = data.get('test_size', 0.2)
+    random_state = data.get('random_state', 42)
+
+    result = ml_detector.train_model(test_size=test_size, random_state=random_state)
+    return jsonify(result)
+
+
+@app.route('/api/ml/model-info', methods=['GET'])
+@login_required
+def get_ml_model_info():
+    """Obtener información del modelo ML"""
+    info = ml_detector.get_model_info()
+    return jsonify(info)
+
+
+@app.route('/api/ml/predict', methods=['POST'])
+@login_required
+def ml_predict():
+    """Predecir si un evento es malicioso usando ML"""
+    event_data = request.json
+    prediction = ml_detector.predict(event_data)
+    return jsonify(prediction)
+
+
+@app.route('/api/ml/suggestions', methods=['GET'])
+@login_required
+def get_ml_suggestions():
+    """Obtener sugerencias de IPs sospechosas según ML"""
+    hours_back = request.args.get('hours_back', 24, type=int)
+    min_confidence = request.args.get('min_confidence', 0.6, type=float)
+
+    # Verificar si el modelo está entrenado
+    if ml_detector.model is None:
+        return jsonify({
+            'model_trained': False,
+            'suggestions': [],
+            'message': 'Modelo no entrenado. Por favor entrena el modelo primero.'
+        })
+
+    suggestions = ml_detector.get_suspicious_ips(
+        hours_back=hours_back,
+        min_confidence=min_confidence
+    )
+
+    return jsonify({
+        'model_trained': True,
+        'suggestions': suggestions,
+        'total': len(suggestions)
+    })
 
 
 # ==================== MANEJO DE ERRORES ====================

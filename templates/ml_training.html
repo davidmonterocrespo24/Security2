@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+
+{% block title %}ML Training - Sistema de Seguridad{% endblock %}
+{% block header %}Machine Learning - Entrenamiento{% endblock %}
+
+{% block content %}
+<!-- Training Status -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <!-- Model Status -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-bold mb-4 flex items-center">
+            <i class="fas fa-brain mr-2 text-purple-600"></i>
+            Estado del Modelo
+        </h3>
+        <div id="model-status" class="space-y-3">
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin text-4xl text-gray-400"></i>
+                <p class="text-gray-500 mt-2">Cargando...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Data -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-bold mb-4 flex items-center">
+            <i class="fas fa-database mr-2 text-blue-600"></i>
+            Datos de Entrenamiento
+        </h3>
+        <div id="training-data-info" class="space-y-3">
+            <div class="flex justify-between">
+                <span class="text-sm text-gray-600">Total Eventos:</span>
+                <span class="text-sm font-bold" id="total-events">-</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-sm text-gray-600">Eventos Maliciosos:</span>
+                <span class="text-sm font-bold text-red-600" id="malicious-events">-</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-sm text-gray-600">Eventos Normales:</span>
+                <span class="text-sm font-bold text-green-600" id="normal-events">-</span>
+            </div>
+            <div class="mt-4">
+                <div class="text-xs text-gray-500 mb-1">Balance de Datos</div>
+                <div id="data-balance-bar" class="w-full bg-gray-200 rounded-full h-3">
+                    <div class="bg-red-500 h-3 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Performance -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-bold mb-4 flex items-center">
+            <i class="fas fa-chart-bar mr-2 text-green-600"></i>
+            Rendimiento
+        </h3>
+        <div id="model-performance" class="space-y-3">
+            <div class="text-center">
+                <div class="text-4xl font-bold text-gray-800" id="accuracy-display">-</div>
+                <div class="text-sm text-gray-500 mt-1">Accuracy</div>
+            </div>
+            <div class="mt-4">
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="text-gray-600">Precision:</span>
+                    <span class="font-bold" id="precision-display">-</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-gray-600">Recall:</span>
+                    <span class="font-bold" id="recall-display">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Training Configuration -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-cogs mr-2 text-blue-600"></i>
+        Configuración de Entrenamiento
+    </h3>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Días de Datos</label>
+            <input type="number" id="days-back" value="30" min="1" max="365"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="text-xs text-gray-500 mt-1">Días históricos para entrenar</p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Test Size</label>
+            <select id="test-size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="0.1">10%</option>
+                <option value="0.2" selected>20%</option>
+                <option value="0.3">30%</option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">% datos para prueba</p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Random State</label>
+            <input type="number" id="random-state" value="42" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="text-xs text-gray-500 mt-1">Semilla para reproducibilidad</p>
+        </div>
+    </div>
+
+    <div class="flex gap-4">
+        <button onclick="startTraining()" id="train-btn"
+            class="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition font-bold">
+            <i class="fas fa-play mr-2"></i>
+            Entrenar Modelo
+        </button>
+        <button onclick="loadModelInfo()"
+            class="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
+            <i class="fas fa-sync mr-2"></i>
+            Recargar Info
+        </button>
+    </div>
+</div>
+
+<!-- Training Progress -->
+<div id="training-progress" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-tasks mr-2 text-blue-600"></i>
+        Progreso del Entrenamiento
+    </h3>
+    <div class="space-y-4">
+        <div>
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium">Entrenando modelo...</span>
+                <span class="text-sm text-gray-500" id="training-status">Preparando datos...</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div id="progress-bar" class="bg-blue-600 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+        </div>
+        <div id="training-log" class="bg-gray-50 p-4 rounded-lg max-h-64 overflow-y-auto font-mono text-xs">
+            <!-- Training logs -->
+        </div>
+    </div>
+</div>
+
+<!-- Training Results -->
+<div id="training-results" class="hidden">
+    <!-- Confusion Matrix -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-table mr-2 text-blue-600"></i>
+                Matriz de Confusión
+            </h3>
+            <div id="confusion-matrix-container" class="overflow-x-auto">
+                <!-- Confusion matrix -->
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-chart-line mr-2 text-blue-600"></i>
+                Métricas de Clasificación
+            </h3>
+            <div id="classification-metrics" class="space-y-3">
+                <!-- Classification metrics -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature Importance -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-trophy mr-2 text-blue-600"></i>
+            Importancia de Características
+        </h3>
+        <div id="feature-importance-container" class="max-h-96 overflow-y-auto">
+            <!-- Feature importance -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadModelInfo() {
+    try {
+        const response = await fetch('/api/ml/model-info');
+        const data = await response.json();
+
+        displayModelStatus(data);
+
+        // Load training data stats
+        loadTrainingDataStats();
+
+    } catch (error) {
+        console.error('Error loading model info:', error);
+        showNotification('Error al cargar información del modelo', 'error');
+    }
+}
+
+function displayModelStatus(data) {
+    const container = document.getElementById('model-status');
+
+    if (!data.is_trained) {
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-exclamation-triangle text-4xl text-yellow-500 mb-2"></i>
+                <p class="text-gray-700 font-medium">Modelo No Entrenado</p>
+                <p class="text-xs text-gray-500 mt-1">Entrena el modelo para comenzar a usar ML</p>
+            </div>
+        `;
+        document.getElementById('accuracy-display').textContent = '-';
+        document.getElementById('precision-display').textContent = '-';
+        document.getElementById('recall-display').textContent = '-';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="text-center py-2">
+            <i class="fas fa-check-circle text-4xl text-green-500 mb-2"></i>
+            <p class="text-gray-700 font-medium">Modelo Entrenado</p>
+        </div>
+        <div class="mt-4 space-y-2 text-sm">
+            <div class="flex justify-between">
+                <span class="text-gray-600">Tipo:</span>
+                <span class="font-medium">${data.model_type || 'N/A'}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-600">Árboles:</span>
+                <span class="font-medium">${data.n_estimators || 'N/A'}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-600">Características:</span>
+                <span class="font-medium">${data.features_count || 'N/A'}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-600">Anomaly Detection:</span>
+                <span class="font-medium">${data.has_anomaly_detector ? 'Sí' : 'No'}</span>
+            </div>
+        </div>
+    `;
+}
+
+async function loadTrainingDataStats() {
+    try {
+        const response = await fetch('/api/security/events?limit=10000');
+        const data = await response.json();
+
+        const events = data.events || [];
+        const malicious = events.filter(e => ['critical', 'high'].includes(e.severity)).length;
+        const normal = events.length - malicious;
+
+        document.getElementById('total-events').textContent = events.length;
+        document.getElementById('malicious-events').textContent = malicious;
+        document.getElementById('normal-events').textContent = normal;
+
+        // Update balance bar
+        const maliciousPercent = events.length > 0 ? (malicious / events.length * 100) : 0;
+        const balanceBar = document.getElementById('data-balance-bar').querySelector('div');
+        balanceBar.style.width = `${maliciousPercent}%`;
+
+    } catch (error) {
+        console.error('Error loading training data stats:', error);
+    }
+}
+
+async function startTraining() {
+    const daysBack = document.getElementById('days-back').value;
+    const testSize = document.getElementById('test-size').value;
+    const randomState = document.getElementById('random-state').value;
+
+    // Show progress
+    document.getElementById('training-progress').classList.remove('hidden');
+    document.getElementById('training-results').classList.add('hidden');
+    document.getElementById('train-btn').disabled = true;
+    document.getElementById('train-btn').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Entrenando...';
+
+    const logContainer = document.getElementById('training-log');
+    logContainer.innerHTML = '';
+
+    function addLog(message) {
+        const logEntry = document.createElement('div');
+        logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logContainer.appendChild(logEntry);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    addLog('Iniciando entrenamiento del modelo...');
+    updateProgress(10, 'Preparando datos...');
+
+    try {
+        addLog(`Configuración: ${daysBack} días, test_size=${testSize}, random_state=${randomState}`);
+        updateProgress(20, 'Enviando solicitud...');
+
+        const response = await fetch('/api/ml/train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                days_back: parseInt(daysBack),
+                test_size: parseFloat(testSize),
+                random_state: parseInt(randomState)
+            })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            addLog(`ERROR: ${result.error}`);
+            showNotification(result.error, 'error');
+            updateProgress(100, 'Error en entrenamiento');
+            return;
+        }
+
+        addLog('Extrayendo características...');
+        updateProgress(40, 'Entrenando Random Forest...');
+
+        addLog(`Muestras de entrenamiento: ${result.training_samples}`);
+        addLog(`Muestras de prueba: ${result.test_samples}`);
+        updateProgress(60, 'Evaluando modelo...');
+
+        addLog(`Accuracy: ${(result.accuracy * 100).toFixed(2)}%`);
+        addLog(`Ratio malicioso: ${(result.malicious_ratio * 100).toFixed(1)}%`);
+        updateProgress(80, 'Guardando modelo...');
+
+        addLog('Modelo entrenado exitosamente!');
+        updateProgress(100, 'Completado');
+
+        // Display results
+        displayTrainingResults(result);
+
+        // Update model info
+        loadModelInfo();
+
+        showNotification('Modelo entrenado exitosamente!', 'success');
+
+    } catch (error) {
+        console.error('Error training model:', error);
+        addLog(`ERROR: ${error.message}`);
+        showNotification('Error al entrenar modelo', 'error');
+        updateProgress(100, 'Error');
+    } finally {
+        document.getElementById('train-btn').disabled = false;
+        document.getElementById('train-btn').innerHTML = '<i class="fas fa-play mr-2"></i>Entrenar Modelo';
+    }
+}
+
+function updateProgress(percent, status) {
+    document.getElementById('progress-bar').style.width = `${percent}%`;
+    document.getElementById('training-status').textContent = status;
+}
+
+function displayTrainingResults(result) {
+    document.getElementById('training-results').classList.remove('hidden');
+
+    // Update performance metrics
+    document.getElementById('accuracy-display').textContent = `${(result.accuracy * 100).toFixed(1)}%`;
+
+    const report = result.classification_report;
+    if (report && report['1']) {
+        document.getElementById('precision-display').textContent = `${(report['1'].precision * 100).toFixed(1)}%`;
+        document.getElementById('recall-display').textContent = `${(report['1'].recall * 100).toFixed(1)}%`;
+    }
+
+    // Display confusion matrix
+    displayConfusionMatrix(result.confusion_matrix);
+
+    // Display classification metrics
+    displayClassificationMetrics(report);
+
+    // Display feature importance
+    if (result.feature_importance) {
+        displayFeatureImportance(result.feature_importance);
+    }
+}
+
+function displayConfusionMatrix(matrix) {
+    const container = document.getElementById('confusion-matrix-container');
+
+    const html = `
+        <div class="grid grid-cols-3 gap-2 max-w-md mx-auto">
+            <div class=""></div>
+            <div class="text-center font-bold text-sm">Pred: Normal</div>
+            <div class="text-center font-bold text-sm">Pred: Malicioso</div>
+
+            <div class="text-right font-bold text-sm pr-2">Real: Normal</div>
+            <div class="bg-green-100 p-4 rounded text-center font-bold text-2xl">${matrix[0][0]}</div>
+            <div class="bg-red-100 p-4 rounded text-center font-bold text-2xl">${matrix[0][1]}</div>
+
+            <div class="text-right font-bold text-sm pr-2">Real: Malicioso</div>
+            <div class="bg-red-100 p-4 rounded text-center font-bold text-2xl">${matrix[1][0]}</div>
+            <div class="bg-green-100 p-4 rounded text-center font-bold text-2xl">${matrix[1][1]}</div>
+        </div>
+        <div class="mt-4 text-xs text-gray-600 text-center">
+            <p>Verde = Correcto | Rojo = Error</p>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function displayClassificationMetrics(report) {
+    const container = document.getElementById('classification-metrics');
+
+    if (!report) {
+        container.innerHTML = '<p class="text-gray-500">No hay métricas disponibles</p>';
+        return;
+    }
+
+    const classes = ['0', '1'];
+    const classNames = { '0': 'Normal', '1': 'Malicioso' };
+
+    let html = '<div class="space-y-4">';
+
+    classes.forEach(cls => {
+        if (report[cls]) {
+            const metrics = report[cls];
+            html += `
+                <div class="border-l-4 ${cls === '1' ? 'border-red-500' : 'border-green-500'} pl-4">
+                    <h4 class="font-bold text-sm mb-2">${classNames[cls]}</h4>
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                            <div class="text-gray-600">Precision</div>
+                            <div class="font-bold">${(metrics.precision * 100).toFixed(1)}%</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-600">Recall</div>
+                            <div class="font-bold">${(metrics.recall * 100).toFixed(1)}%</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-600">F1-Score</div>
+                            <div class="font-bold">${(metrics['f1-score'] * 100).toFixed(1)}%</div>
+                        </div>
+                    </div>
+                    <div class="mt-1 text-gray-500 text-xs">Support: ${metrics.support}</div>
+                </div>
+            `;
+        }
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function displayFeatureImportance(features) {
+    const container = document.getElementById('feature-importance-container');
+
+    let html = '<div class="space-y-2">';
+
+    features.slice(0, 15).forEach((feature, index) => {
+        const percent = (feature.importance * 100).toFixed(2);
+        html += `
+            <div>
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="font-medium">#${index + 1}. ${feature.feature}</span>
+                    <span class="text-gray-600">${percent}%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full" style="width: ${percent}%"></div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Load model info on page load
+document.addEventListener('DOMContentLoaded', loadModelInfo);
+</script>
+{% endblock %}

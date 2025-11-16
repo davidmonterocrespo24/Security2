@@ -1,0 +1,579 @@
+{% extends "base.html" %}
+
+{% block title %}Security Dashboard - Sistema de Seguridad{% endblock %}
+{% block header %}Security Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Total Events 24h -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Eventos 24h</p>
+                <p class="text-3xl font-bold text-gray-800" id="total-events-24h">0</p>
+            </div>
+            <div class="bg-purple-100 p-3 rounded-full">
+                <i class="fas fa-chart-line text-purple-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Critical Events -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Eventos Críticos</p>
+                <p class="text-3xl font-bold text-gray-800" id="critical-events">0</p>
+            </div>
+            <div class="bg-red-100 p-3 rounded-full">
+                <i class="fas fa-exclamation-circle text-red-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Blocked IPs -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">IPs Bloqueadas</p>
+                <p class="text-3xl font-bold text-gray-800" id="blocked-ips-count">0</p>
+            </div>
+            <div class="bg-orange-100 p-3 rounded-full">
+                <i class="fas fa-ban text-orange-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Alerts -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Alertas Pendientes</p>
+                <p class="text-3xl font-bold text-gray-800" id="pending-alerts">0</p>
+            </div>
+            <div class="bg-yellow-100 p-3 rounded-full">
+                <i class="fas fa-bell text-yellow-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Attack Map and Timeline -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Attack Map -->
+    <div class="lg:col-span-2 bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-globe-americas mr-2 text-blue-600"></i>
+            Mapa de Ataques en Tiempo Real
+        </h3>
+        <div id="attack-map" class="h-96 bg-gray-100 rounded-lg flex items-center justify-center">
+            <p class="text-gray-500">Cargando mapa...</p>
+        </div>
+    </div>
+
+    <!-- Top Attack Countries -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-flag mr-2 text-blue-600"></i>
+            Países Principales
+        </h3>
+        <div id="top-countries" class="space-y-3 max-h-96 overflow-y-auto">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+</div>
+
+<!-- Attack Statistics Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Attack Types Chart -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-chart-pie mr-2 text-blue-600"></i>
+            Tipos de Ataque
+        </h3>
+        <canvas id="attack-types-chart" height="300"></canvas>
+    </div>
+
+    <!-- Attack Timeline -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-chart-area mr-2 text-blue-600"></i>
+            Timeline de Ataques (24h)
+        </h3>
+        <canvas id="attack-timeline-chart" height="300"></canvas>
+    </div>
+</div>
+
+<!-- Severity Distribution and Recent Events -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Severity Distribution -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-layer-group mr-2 text-blue-600"></i>
+            Distribución por Severidad
+        </h3>
+        <canvas id="severity-chart" height="250"></canvas>
+    </div>
+
+    <!-- Recent Security Events -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-history mr-2 text-blue-600"></i>
+            Eventos Recientes
+        </h3>
+        <div id="recent-events" class="space-y-2 max-h-96 overflow-y-auto">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+</div>
+
+<!-- Top Attacker IPs Table -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-users-slash mr-2 text-blue-600"></i>
+        Top IPs Atacantes
+    </h3>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">País</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ataques</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severidad</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="top-ips-table" class="bg-white divide-y divide-gray-200">
+                <!-- Se llenará dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js for charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- Leaflet for maps -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+let attackMap;
+let attackTypesChart;
+let attackTimelineChart;
+let severityChart;
+
+async function loadSecurityDashboard() {
+    try {
+        // Load dashboard stats
+        const statsResponse = await fetch('/api/dashboard/stats');
+        const stats = await statsResponse.json();
+
+        // Update stat cards
+        document.getElementById('total-events-24h').textContent = stats.total_events_24h || 0;
+        document.getElementById('critical-events').textContent = stats.critical_events_24h || 0;
+        document.getElementById('blocked-ips-count').textContent = stats.blocked_ips || 0;
+        document.getElementById('pending-alerts').textContent = stats.pending_alerts || 0;
+
+        // Load attack statistics
+        const attackStatsResponse = await fetch('/api/security/attack-stats?hours=24');
+        const attackStats = await attackStatsResponse.json();
+
+        // Update charts
+        updateAttackTypesChart(attackStats.by_attack_type || {});
+        updateAttackTimelineChart(attackStats.hourly_stats || []);
+        updateSeverityChart(attackStats.by_severity || {});
+
+        // Load security events
+        const eventsResponse = await fetch('/api/security/events?limit=10');
+        const eventsData = await eventsResponse.json();
+        displayRecentEvents(eventsData.events || []);
+
+        // Load top attacker IPs
+        loadTopAttackerIPs(attackStats.top_ips || []);
+
+        // Initialize map with attack locations
+        initializeAttackMap(attackStats.geo_data || []);
+
+        // Display top countries
+        displayTopCountries(attackStats.by_country || {});
+
+    } catch (error) {
+        console.error('Error loading security dashboard:', error);
+    }
+}
+
+function initializeAttackMap(geoData) {
+    const mapContainer = document.getElementById('attack-map');
+
+    if (!attackMap) {
+        attackMap = L.map('attack-map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(attackMap);
+    }
+
+    // Clear existing markers
+    attackMap.eachLayer((layer) => {
+        if (layer instanceof L.Marker) {
+            attackMap.removeLayer(layer);
+        }
+    });
+
+    // Add markers for each attack location
+    geoData.forEach(location => {
+        if (location.lat && location.lon) {
+            const severity = location.severity || 'low';
+            const color = severity === 'critical' ? 'red' : severity === 'high' ? 'orange' : severity === 'medium' ? 'yellow' : 'blue';
+
+            const marker = L.circleMarker([location.lat, location.lon], {
+                radius: Math.min(location.count * 2, 20),
+                fillColor: color,
+                color: color,
+                weight: 1,
+                opacity: 0.8,
+                fillOpacity: 0.5
+            }).addTo(attackMap);
+
+            marker.bindPopup(`
+                <b>${location.country || 'Unknown'}</b><br>
+                IP: ${location.ip}<br>
+                Ataques: ${location.count}<br>
+                Severidad: ${severity}
+            `);
+        }
+    });
+}
+
+function updateAttackTypesChart(data) {
+    const ctx = document.getElementById('attack-types-chart').getContext('2d');
+
+    if (attackTypesChart) {
+        attackTypesChart.destroy();
+    }
+
+    const labels = Object.keys(data);
+    const values = Object.values(data);
+
+    attackTypesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: [
+                    '#EF4444', '#F59E0B', '#10B981', '#3B82F6',
+                    '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
+                }
+            }
+        }
+    });
+}
+
+function updateAttackTimelineChart(hourlyData) {
+    const ctx = document.getElementById('attack-timeline-chart').getContext('2d');
+
+    if (attackTimelineChart) {
+        attackTimelineChart.destroy();
+    }
+
+    const labels = hourlyData.map(h => h.hour || h.label || '');
+    const critical = hourlyData.map(h => h.critical || 0);
+    const high = hourlyData.map(h => h.high || 0);
+    const medium = hourlyData.map(h => h.medium || 0);
+    const low = hourlyData.map(h => h.low || 0);
+
+    attackTimelineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Critical',
+                    data: critical,
+                    borderColor: '#EF4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    fill: true
+                },
+                {
+                    label: 'High',
+                    data: high,
+                    borderColor: '#F59E0B',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    fill: true
+                },
+                {
+                    label: 'Medium',
+                    data: medium,
+                    borderColor: '#FBBF24',
+                    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                    fill: true
+                },
+                {
+                    label: 'Low',
+                    data: low,
+                    borderColor: '#3B82F6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function updateSeverityChart(data) {
+    const ctx = document.getElementById('severity-chart').getContext('2d');
+
+    if (severityChart) {
+        severityChart.destroy();
+    }
+
+    severityChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Critical', 'High', 'Medium', 'Low'],
+            datasets: [{
+                label: 'Eventos',
+                data: [
+                    data.critical || 0,
+                    data.high || 0,
+                    data.medium || 0,
+                    data.low || 0
+                ],
+                backgroundColor: [
+                    '#EF4444',
+                    '#F59E0B',
+                    '#FBBF24',
+                    '#3B82F6'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function displayRecentEvents(events) {
+    const container = document.getElementById('recent-events');
+    container.innerHTML = '';
+
+    if (!events || events.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-4">No hay eventos recientes</p>';
+        return;
+    }
+
+    events.forEach(event => {
+        const severityColors = {
+            critical: 'bg-red-100 text-red-800 border-red-500',
+            high: 'bg-orange-100 text-orange-800 border-orange-500',
+            medium: 'bg-yellow-100 text-yellow-800 border-yellow-500',
+            low: 'bg-blue-100 text-blue-800 border-blue-500'
+        };
+
+        const color = severityColors[event.severity] || severityColors.low;
+
+        const div = document.createElement('div');
+        div.className = `p-3 rounded-lg border-l-4 ${color} cursor-pointer hover:shadow-md transition`;
+        div.onclick = () => viewEventDetails(event.id);
+        div.innerHTML = `
+            <div class="flex justify-between items-start">
+                <div class="flex-1">
+                    <p class="text-sm font-medium">${event.attack_vector || event.event_type}</p>
+                    <p class="text-xs mt-1">${event.source_ip} - ${event.description || ''}</p>
+                </div>
+                <span class="text-xs px-2 py-1 rounded-full ${color}">${event.severity}</span>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">${formatTimestamp(event.timestamp)}</p>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function displayTopCountries(countriesData) {
+    const container = document.getElementById('top-countries');
+    container.innerHTML = '';
+
+    const sorted = Object.entries(countriesData)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+
+    if (sorted.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-4">No hay datos</p>';
+        return;
+    }
+
+    const maxCount = sorted[0][1];
+
+    sorted.forEach(([country, count]) => {
+        const percentage = (count / maxCount) * 100;
+
+        const div = document.createElement('div');
+        div.innerHTML = `
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-sm font-medium">${country}</span>
+                <span class="text-sm font-bold">${count}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-red-500 h-2 rounded-full" style="width: ${percentage}%"></div>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function loadTopAttackerIPs(topIPs) {
+    const tbody = document.getElementById('top-ips-table');
+    tbody.innerHTML = '';
+
+    if (!topIPs || topIPs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No hay datos de atacantes</td></tr>';
+        return;
+    }
+
+    topIPs.forEach(ip => {
+        const severityBadge = getSeverityBadge(ip.max_severity || 'low');
+        const statusBadge = ip.is_blocked ?
+            '<span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Bloqueada</span>' :
+            '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Activa</span>';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono">${ip.ip_address}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${ip.country || 'Unknown'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">${ip.count || 0}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${severityBadge}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <button onclick="analyzeIP('${ip.ip_address}')" class="text-blue-600 hover:text-blue-800 mr-2">
+                    <i class="fas fa-search"></i>
+                </button>
+                ${!ip.is_blocked ?
+                    `<button onclick="blockIP('${ip.ip_address}')" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-ban"></i>
+                    </button>` :
+                    `<button onclick="unblockIP('${ip.ip_address}')" class="text-green-600 hover:text-green-800">
+                        <i class="fas fa-unlock"></i>
+                    </button>`
+                }
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function getSeverityBadge(severity) {
+    const badges = {
+        critical: '<span class="px-2 py-1 bg-red-500 text-white rounded-full text-xs">Critical</span>',
+        high: '<span class="px-2 py-1 bg-orange-500 text-white rounded-full text-xs">High</span>',
+        medium: '<span class="px-2 py-1 bg-yellow-500 text-white rounded-full text-xs">Medium</span>',
+        low: '<span class="px-2 py-1 bg-blue-500 text-white rounded-full text-xs">Low</span>'
+    };
+    return badges[severity] || badges.low;
+}
+
+async function analyzeIP(ip) {
+    window.location.href = `/ip-analysis?ip=${ip}`;
+}
+
+async function blockIP(ip) {
+    if (!confirm(`¿Bloquear la IP ${ip}?`)) return;
+
+    try {
+        const response = await fetch('/api/security/block-ip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ip_address: ip,
+                reason: 'Manual block from dashboard',
+                duration_hours: 24
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`IP ${ip} bloqueada exitosamente`, 'success');
+            loadSecurityDashboard();
+        } else {
+            showNotification('Error al bloquear IP', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al bloquear IP', 'error');
+    }
+}
+
+async function unblockIP(ip) {
+    if (!confirm(`¿Desbloquear la IP ${ip}?`)) return;
+
+    try {
+        const response = await fetch('/api/security/unblock-ip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip_address: ip })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`IP ${ip} desbloqueada exitosamente`, 'success');
+            loadSecurityDashboard();
+        } else {
+            showNotification('Error al desbloquear IP', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al desbloquear IP', 'error');
+    }
+}
+
+function viewEventDetails(eventId) {
+    window.location.href = `/security-events?event=${eventId}`;
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return 'Desconocido';
+    const date = new Date(timestamp);
+    return date.toLocaleString('es-ES');
+}
+
+// Load dashboard on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadSecurityDashboard();
+    // Refresh every 30 seconds
+    setInterval(loadSecurityDashboard, 30000);
+});
+</script>
+{% endblock %}

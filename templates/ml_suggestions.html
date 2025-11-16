@@ -1,0 +1,482 @@
+{% extends "base.html" %}
+
+{% block title %}ML Suggestions - Sistema de Seguridad{% endblock %}
+{% block header %}Machine Learning - Sugerencias{% endblock %}
+
+{% block content %}
+<!-- Filter Bar -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Confianza Mínima</label>
+            <select id="min-confidence" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="0.5">50%</option>
+                <option value="0.6" selected>60%</option>
+                <option value="0.7">70%</option>
+                <option value="0.8">80%</option>
+                <option value="0.9">90%</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Horas Atrás</label>
+            <input type="number" id="hours-back" value="24" min="1" max="168"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Acción Recomendada</label>
+            <select id="filter-action" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todas</option>
+                <option value="block">Bloquear</option>
+                <option value="monitor">Monitorear</option>
+            </select>
+        </div>
+        <div class="flex items-end">
+            <button onclick="loadSuggestions()" class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                <i class="fas fa-sync mr-2"></i>
+                Actualizar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">IPs Sospechosas</p>
+                <p class="text-3xl font-bold text-gray-800" id="suspicious-count">0</p>
+            </div>
+            <i class="fas fa-exclamation-triangle text-red-500 text-3xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Alta Confianza (>80%)</p>
+                <p class="text-3xl font-bold text-gray-800" id="high-confidence-count">0</p>
+            </div>
+            <i class="fas fa-fire text-orange-500 text-3xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Anomalías Detectadas</p>
+                <p class="text-3xl font-bold text-gray-800" id="anomaly-count">0</p>
+            </div>
+            <i class="fas fa-chart-line text-yellow-500 text-3xl"></i>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Ya Bloqueadas</p>
+                <p class="text-3xl font-bold text-gray-800" id="blocked-count">0</p>
+            </div>
+            <i class="fas fa-ban text-blue-500 text-3xl"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Model Status Warning -->
+<div id="model-warning" class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 hidden">
+    <div class="flex items-center">
+        <i class="fas fa-exclamation-triangle text-yellow-500 text-2xl mr-3"></i>
+        <div>
+            <h4 class="font-bold text-yellow-800">Modelo No Entrenado</h4>
+            <p class="text-sm text-yellow-700">El modelo de Machine Learning no ha sido entrenado. <a href="/ml-training" class="underline font-medium">Ir a Entrenamiento</a></p>
+        </div>
+    </div>
+</div>
+
+<!-- Suspicious IPs Table -->
+<div class="bg-white rounded-lg shadow-md p-6">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-bold flex items-center">
+            <i class="fas fa-brain mr-2 text-purple-600"></i>
+            Sugerencias del Modelo ML
+        </h3>
+        <div class="text-sm text-gray-500">
+            Auto-refresh: <span id="auto-refresh-countdown">60</span>s
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confianza ML</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Eventos</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Anomalías</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">País</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recomendación</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="suggestions-table" class="bg-white divide-y divide-gray-200">
+                <!-- Se llenará dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Suggestion Detail Modal -->
+<div id="suggestion-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-screen overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i class="fas fa-info-circle mr-2 text-purple-600"></i>
+                    Detalles de Sugerencia ML
+                </h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+
+            <div id="modal-content" class="space-y-4">
+                <!-- Se llenará dinámicamente -->
+            </div>
+
+            <div class="mt-6 flex gap-3">
+                <button onclick="blockIPFromModal()" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                    <i class="fas fa-ban mr-2"></i>
+                    Bloquear IP
+                </button>
+                <button onclick="analyzeIPFromModal()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                    <i class="fas fa-search mr-2"></i>
+                    Análisis Completo
+                </button>
+                <button onclick="ignoreIPFromModal()" class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
+                    <i class="fas fa-eye-slash mr-2"></i>
+                    Ignorar (Whitelist)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentIP = null;
+let suggestions = [];
+let autoRefreshInterval;
+let countdownInterval;
+
+async function loadSuggestions() {
+    const minConfidence = document.getElementById('min-confidence').value;
+    const hoursBack = document.getElementById('hours-back').value;
+
+    try {
+        const response = await fetch(`/api/ml/suggestions?min_confidence=${minConfidence}&hours_back=${hoursBack}`);
+        const data = await response.json();
+
+        if (!data.model_trained) {
+            document.getElementById('model-warning').classList.remove('hidden');
+            document.getElementById('suggestions-table').innerHTML = `
+                <tr>
+                    <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                        <i class="fas fa-brain text-4xl text-gray-300 mb-2"></i>
+                        <p>Modelo no entrenado. Por favor entrena el modelo primero.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        document.getElementById('model-warning').classList.add('hidden');
+        suggestions = data.suggestions || [];
+
+        displaySuggestions(suggestions);
+        updateSummary(suggestions);
+
+    } catch (error) {
+        console.error('Error loading suggestions:', error);
+        showNotification('Error al cargar sugerencias', 'error');
+    }
+}
+
+function displaySuggestions(suggestions) {
+    const tbody = document.getElementById('suggestions-table');
+    tbody.innerHTML = '';
+
+    const filterAction = document.getElementById('filter-action').value;
+    let filteredSuggestions = suggestions;
+
+    if (filterAction) {
+        filteredSuggestions = suggestions.filter(s => s.recommended_action === filterAction);
+    }
+
+    if (!filteredSuggestions || filteredSuggestions.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                    <i class="fas fa-check-circle text-4xl text-green-400 mb-2"></i>
+                    <p>No hay IPs sospechosas según el modelo ML</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    filteredSuggestions.forEach(suggestion => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50 cursor-pointer';
+        tr.onclick = () => showSuggestionDetails(suggestion);
+
+        const confidenceColor = suggestion.ml_confidence > 0.8 ? 'text-red-600' :
+                                suggestion.ml_confidence > 0.6 ? 'text-orange-600' : 'text-yellow-600';
+
+        const recommendationBadge = suggestion.recommended_action === 'block' ?
+            '<span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold">BLOQUEAR</span>' :
+            '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold">MONITOREAR</span>';
+
+        const statusBadge = suggestion.is_blocked ?
+            '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Bloqueada</span>' :
+            '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Activa</span>';
+
+        tr.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono font-bold">${suggestion.ip_address}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center">
+                    <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                        <div class="${confidenceColor.replace('text-', 'bg-')} h-2 rounded-full" style="width: ${suggestion.ml_confidence * 100}%"></div>
+                    </div>
+                    <span class="text-sm font-bold ${confidenceColor}">${(suggestion.ml_confidence * 100).toFixed(0)}%</span>
+                </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="font-bold">${suggestion.total_events}</span>
+                <span class="text-red-600 ml-1">(${suggestion.suspicious_events})</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-yellow-600">${suggestion.anomaly_events}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${suggestion.country}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${recommendationBadge}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <button onclick="event.stopPropagation(); blockIP('${suggestion.ip_address}')" class="text-red-600 hover:text-red-800 mr-2" title="Bloquear">
+                    <i class="fas fa-ban"></i>
+                </button>
+                <button onclick="event.stopPropagation(); analyzeIP('${suggestion.ip_address}')" class="text-blue-600 hover:text-blue-800" title="Analizar">
+                    <i class="fas fa-search"></i>
+                </button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+function updateSummary(suggestions) {
+    document.getElementById('suspicious-count').textContent = suggestions.length;
+    document.getElementById('high-confidence-count').textContent = suggestions.filter(s => s.ml_confidence > 0.8).length;
+    document.getElementById('anomaly-count').textContent = suggestions.reduce((sum, s) => sum + s.anomaly_events, 0);
+    document.getElementById('blocked-count').textContent = suggestions.filter(s => s.is_blocked).length;
+}
+
+function showSuggestionDetails(suggestion) {
+    currentIP = suggestion.ip_address;
+
+    const modal = document.getElementById('suggestion-modal');
+    const content = document.getElementById('modal-content');
+
+    const confidenceColor = suggestion.ml_confidence > 0.8 ? 'text-red-600' :
+                            suggestion.ml_confidence > 0.6 ? 'text-orange-600' : 'text-yellow-600';
+
+    content.innerHTML = `
+        <div class="bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <h4 class="font-bold text-purple-900 mb-2">Análisis del Modelo ML</h4>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                    <span class="text-purple-700">Confianza:</span>
+                    <span class="ml-2 font-bold ${confidenceColor}">${(suggestion.ml_confidence * 100).toFixed(1)}%</span>
+                </div>
+                <div>
+                    <span class="text-purple-700">Recomendación:</span>
+                    <span class="ml-2 font-bold">${suggestion.recommended_action === 'block' ? 'BLOQUEAR' : 'MONITOREAR'}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            <div>
+                <label class="text-sm font-medium text-gray-600">Dirección IP</label>
+                <p class="text-lg font-mono font-bold">${suggestion.ip_address}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-sm font-medium text-gray-600">Total Eventos</label>
+                    <p class="text-2xl font-bold">${suggestion.total_events}</p>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-600">Eventos Sospechosos</label>
+                    <p class="text-2xl font-bold text-red-600">${suggestion.suspicious_events}</p>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-600">Anomalías</label>
+                    <p class="text-2xl font-bold text-yellow-600">${suggestion.anomaly_events}</p>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-600">País</label>
+                    <p class="text-lg font-bold">${suggestion.country}</p>
+                </div>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium text-gray-600">Razones del Modelo</label>
+                <p class="text-sm text-gray-700 bg-gray-50 p-3 rounded">${suggestion.reasons}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <label class="text-xs font-medium text-gray-600">Primera Detección</label>
+                    <p class="font-medium">${formatTimestamp(suggestion.first_seen)}</p>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600">Última Detección</label>
+                    <p class="font-medium">${formatTimestamp(suggestion.last_seen)}</p>
+                </div>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium text-gray-600">Estado Actual</label>
+                <p class="font-medium ${suggestion.is_blocked ? 'text-blue-600' : 'text-green-600'}">
+                    ${suggestion.is_blocked ? 'IP Bloqueada' : 'IP Activa (No bloqueada)'}
+                </p>
+            </div>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeModal() {
+    document.getElementById('suggestion-modal').classList.add('hidden');
+    document.getElementById('suggestion-modal').classList.remove('flex');
+    currentIP = null;
+}
+
+async function blockIP(ip) {
+    if (!confirm(`¿Bloquear la IP ${ip} basado en la sugerencia del modelo ML?`)) return;
+
+    try {
+        const response = await fetch('/api/security/block-ip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ip_address: ip,
+                reason: 'Bloqueado por sugerencia del modelo ML',
+                duration_hours: 24
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`IP ${ip} bloqueada exitosamente`, 'success');
+            loadSuggestions();
+        } else {
+            showNotification('Error al bloquear IP', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al bloquear IP', 'error');
+    }
+}
+
+function analyzeIP(ip) {
+    window.location.href = `/ip-analysis?ip=${ip}`;
+}
+
+function blockIPFromModal() {
+    if (currentIP) {
+        closeModal();
+        blockIP(currentIP);
+    }
+}
+
+function analyzeIPFromModal() {
+    if (currentIP) {
+        analyzeIP(currentIP);
+    }
+}
+
+async function ignoreIPFromModal() {
+    if (!currentIP) return;
+
+    if (!confirm(`¿Agregar ${currentIP} a la whitelist (ignorar sugerencias ML)?`)) return;
+
+    try {
+        const response = await fetch('/api/security/whitelist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ip_address: currentIP,
+                reason: 'Ignorado - falso positivo ML'
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(`IP ${currentIP} agregada a whitelist`, 'success');
+            closeModal();
+            loadSuggestions();
+        } else {
+            showNotification('Error al agregar a whitelist', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error al agregar a whitelist', 'error');
+    }
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return 'Desconocido';
+    const date = new Date(timestamp);
+    return date.toLocaleString('es-ES');
+}
+
+function startAutoRefresh() {
+    let countdown = 60;
+
+    // Clear existing intervals
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    // Auto refresh every 60 seconds
+    autoRefreshInterval = setInterval(() => {
+        loadSuggestions();
+        countdown = 60;
+    }, 60000);
+
+    // Countdown
+    countdownInterval = setInterval(() => {
+        countdown--;
+        document.getElementById('auto-refresh-countdown').textContent = countdown;
+        if (countdown <= 0) countdown = 60;
+    }, 1000);
+}
+
+// Load suggestions on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadSuggestions();
+    startAutoRefresh();
+});
+
+// Close modal when clicking outside
+document.getElementById('suggestion-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'suggestion-modal') {
+        closeModal();
+    }
+});
+</script>
+{% endblock %}
