@@ -185,18 +185,55 @@ setup_ufw() {
     # Configurar reglas básicas
     ufw --force reset > /dev/null 2>&1
 
-    # Permitir SSH para no perder conexión
-    ufw allow ssh > /dev/null 2>&1
+    echo ""
+    print_warning "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_warning "  CRÍTICO: Permitiendo SSH para prevenir bloqueo"
+    print_warning "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Permitir SSH PRIMERO para no perder conexión
     ufw allow 22/tcp > /dev/null 2>&1
+    ufw allow ssh > /dev/null 2>&1
+
+    # Verificar que SSH fue permitido
+    sleep 1
+    if ufw status | grep -q "22"; then
+        print_success "SSH permitido correctamente (puerto 22)"
+    else
+        print_error "No se pudo permitir SSH. UFW NO será activado por seguridad."
+        return 1
+    fi
 
     # Permitir HTTP y HTTPS
+    ufw allow 80/tcp > /dev/null 2>&1
+    ufw allow 443/tcp > /dev/null 2>&1
     ufw allow http > /dev/null 2>&1
     ufw allow https > /dev/null 2>&1
+
+    # Permitir puerto del sistema de seguridad
+    ufw allow 5000/tcp > /dev/null 2>&1
+
+    print_info "Habilitando UFW..."
 
     # Habilitar UFW
     echo "y" | ufw enable > /dev/null 2>&1
 
-    print_success "UFW configurado"
+    echo ""
+
+    # Verificar estado
+    if ufw status | grep -q "Status: active"; then
+        print_success "UFW configurado y activo"
+        echo ""
+        print_info "Reglas configuradas:"
+        echo "  ✓ SSH (22/tcp): PERMITIDO"
+        echo "  ✓ HTTP (80/tcp): PERMITIDO"
+        echo "  ✓ HTTPS (443/tcp): PERMITIDO"
+        echo "  ✓ Security System (5000/tcp): PERMITIDO"
+    else
+        print_warning "UFW instalado pero no activado"
+    fi
+
+    echo ""
 }
 
 # Crear servicio systemd

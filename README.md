@@ -40,6 +40,38 @@ Sistema completo de administración y monitoreo de seguridad para servidores Ubu
 - **Privilegios**: Acceso root/sudo
 - **Servicios**: Nginx, PostgreSQL (opcional), Odoo (opcional)
 
+## ⚠️ ADVERTENCIA DE SEGURIDAD IMPORTANTE
+
+**CRÍTICO - Firewall y SSH**: Al activar el firewall, existe el riesgo de quedarte bloqueado fuera del servidor.
+
+### Protecciones Automáticas Incluidas
+
+Este sistema incluye **múltiples capas de protección** para prevenir el bloqueo:
+
+1. **El sistema automáticamente permite SSH (puerto 22)** antes de activar UFW
+2. **Verifica que la regla fue creada** antes de activar el firewall
+3. **Si no puede permitir SSH, NO activa el firewall** por seguridad
+
+### Si Usas Puerto SSH Personalizado
+
+**IMPORTANTE**: Si tu SSH NO está en el puerto 22:
+
+```bash
+# ANTES de activar el firewall, permite tu puerto SSH personalizado
+sudo ufw allow TU_PUERTO/tcp
+
+# Ejemplo para puerto 2222:
+sudo ufw allow 2222/tcp
+```
+
+### Recomendaciones Antes de Activar el Firewall
+
+- ✅ Verifica tu puerto SSH: `sudo netstat -tlnp | grep ssh`
+- ✅ Asegúrate de tener acceso alternativo (consola física, KVM)
+- ✅ Lee [SECURITY.md](SECURITY.md) para más detalles
+
+**Ver guía completa**: [Guía de Seguridad (SECURITY.md)](SECURITY.md)
+
 ## Instalación Rápida
 
 ### Método 1: Script Automático

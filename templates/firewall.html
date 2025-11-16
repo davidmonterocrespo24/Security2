@@ -4,6 +4,23 @@
 {% block header %}Gestión de Firewall (UFW){% endblock %}
 
 {% block content %}
+<!-- Security Warning -->
+<div class="bg-yellow-50 border-l-4 border-yellow-500 p-6 mb-6">
+    <div class="flex items-start">
+        <i class="fas fa-exclamation-triangle text-yellow-600 text-2xl mr-4 mt-1"></i>
+        <div>
+            <h3 class="text-lg font-bold text-yellow-800 mb-2">⚠️ Advertencia de Seguridad</h3>
+            <p class="text-yellow-700 mb-2">
+                Al activar el firewall, el sistema <strong>automáticamente permitirá SSH (puerto 22)</strong> para prevenir que quedes bloqueado fuera del servidor.
+            </p>
+            <p class="text-yellow-700 text-sm">
+                <i class="fas fa-info-circle mr-1"></i>
+                Si usas un puerto SSH personalizado, asegúrate de agregarlo a las reglas ANTES de activar el firewall.
+            </p>
+        </div>
+    </div>
+</div>
+
 <!-- Firewall Status -->
 <div class="bg-white rounded-lg shadow-md p-6 mb-6">
     <div class="flex items-center justify-between">
@@ -206,7 +223,18 @@
         const enable = !firewallEnabled;
         const action = enable ? 'activar' : 'desactivar';
 
-        if (!confirm(`¿Seguro que deseas ${action} el firewall?`)) return;
+        // Mensaje de confirmación diferente si se va a activar
+        let confirmMessage = `¿Seguro que deseas ${action} el firewall?`;
+
+        if (enable) {
+            confirmMessage = `⚠️ ¿Activar el firewall?\n\n` +
+                           `✓ SSH (puerto 22) será permitido automáticamente\n` +
+                           `✓ Esto previene que quedes bloqueado fuera del servidor\n\n` +
+                           `Si usas un puerto SSH personalizado, asegúrate de haberlo permitido antes.\n\n` +
+                           `¿Continuar?`;
+        }
+
+        if (!confirm(confirmMessage)) return;
 
         try {
             const response = await fetch('/api/firewall/toggle', {
@@ -220,10 +248,12 @@
             const result = await response.json();
 
             if (result.success) {
-                showNotification(`Firewall ${enable ? 'activado' : 'desactivado'}`, 'success');
+                const message = result.message || `Firewall ${enable ? 'activado' : 'desactivado'}`;
+                showNotification(message, 'success');
                 loadFirewallStatus();
+                loadFirewallRules(); // Recargar reglas para mostrar SSH
             } else {
-                showNotification('Error al cambiar estado del firewall', 'error');
+                showNotification(result.error || 'Error al cambiar estado del firewall', 'error');
             }
         } catch (error) {
             console.error('Error:', error);

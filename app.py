@@ -5,11 +5,13 @@ Autor: Security System
 Descripción: Panel de control para gestionar la seguridad de servidores con Odoo, PostgreSQL y Nginx
 """
 
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import os
 import json
 from dotenv import load_dotenv
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Importar módulos del sistema
 from modules.config_manager import ConfigManager
@@ -28,6 +30,27 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'change-this-secret-key')
 CORS(app)
 
+# Configurar Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Por favor, inicia sesión para acceder a esta página.'
+login_manager.login_message_category = 'info'
+
+# Modelo de Usuario
+class User(UserMixin):
+    def __init__(self, id, username):
+        self.id = id
+        self.username = username
+
+# Cargar usuario
+@login_manager.user_loader
+def load_user(user_id):
+    admin_username = os.getenv('ADMIN_USERNAME', 'admin')
+    if user_id == '1':
+        return User(1, admin_username)
+    return None
+
 # Inicializar managers
 config_manager = ConfigManager()
 firewall_manager = FirewallManager()
@@ -39,9 +62,46 @@ installer = SystemInstaller()
 threat_detector = ThreatDetector()
 
 
+# ==================== AUTENTICACIÓN ====================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Página de login"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        remember = request.form.get('remember', False)
+
+        admin_username = os.getenv('ADMIN_USERNAME', 'admin')
+        admin_password = os.getenv('ADMIN_PASSWORD', 'admin')
+
+        if username == admin_username and password == admin_password:
+            user = User(1, admin_username)
+            login_user(user, remember=remember)
+
+            next_page = request.args.get('next')
+            return redirect(next_page if next_page else url_for('index'))
+        else:
+            return render_template('login.html', error='Usuario o contraseña incorrectos')
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Cerrar sesión"""
+    logout_user()
+    return redirect(url_for('login'))
+
+
 # ==================== RUTAS PRINCIPALES ====================
 
 @app.route('/')
+@login_required
 def index():
     """Página principal - Dashboard"""
     config = config_manager.load_config()
@@ -53,36 +113,42 @@ def index():
 
 
 @app.route('/setup')
+@login_required
 def setup():
     """Página de configuración inicial"""
     return render_template('setup.html')
 
 
 @app.route('/firewall')
+@login_required
 def firewall():
     """Página de gestión del firewall"""
     return render_template('firewall.html')
 
 
 @app.route('/fail2ban')
+@login_required
 def fail2ban():
     """Página de gestión de Fail2ban"""
     return render_template('fail2ban.html')
 
 
 @app.route('/logs')
+@login_required
 def logs():
     """Página de análisis de logs"""
     return render_template('logs.html')
 
 
 @app.route('/threats')
+@login_required
 def threats():
     """Página de detección de amenazas"""
     return render_template('threats.html')
 
 
 @app.route('/settings')
+@login_required
 def settings():
     """Página de configuración"""
     return render_template('settings.html')
@@ -92,6 +158,7 @@ def settings():
 
 # --- Configuración ---
 @app.route('/api/config', methods=['GET'])
+@login_required
 def get_config():
     """Obtener configuración actual"""
     config = config_manager.load_config()
@@ -99,6 +166,7 @@ def get_config():
 
 
 @app.route('/api/config', methods=['POST'])
+@login_required
 def save_config():
     """Guardar configuración"""
     data = request.json
@@ -107,6 +175,7 @@ def save_config():
 
 
 @app.route('/api/install', methods=['POST'])
+@login_required
 def install_system():
     """Instalar componentes del sistema"""
     data = request.json
@@ -116,6 +185,7 @@ def install_system():
 
 # --- Dashboard ---
 @app.route('/api/dashboard/stats', methods=['GET'])
+@login_required
 def get_dashboard_stats():
     """Obtener estadísticas del dashboard"""
     stats = {

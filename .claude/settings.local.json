@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(if not exist .env copy .env.example .env)",
+      "Bash(test -f .env)",
+      "Bash(pip install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

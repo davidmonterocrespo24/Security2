@@ -121,12 +121,38 @@ class FirewallManager:
             return {'success': False, 'error': 'UFW no disponible'}
 
         if enable:
+            # CRÍTICO: Asegurar que SSH esté permitido antes de activar el firewall
+            # Esto previene que el usuario quede bloqueado fuera del servidor
+            ssh_result = self._ensure_ssh_allowed()
+            if not ssh_result['success']:
+                return {
+                    'success': False,
+                    'error': 'No se pudo asegurar acceso SSH. Firewall NO activado por seguridad.',
+                    'details': ssh_result.get('error')
+                }
+
             command = "echo 'y' | sudo ufw enable"
         else:
             command = "sudo ufw disable"
 
         result = self._run_command(command)
+
+        # Si se activó correctamente, informar sobre SSH
+        if result['success'] and enable:
+            result['message'] = 'Firewall activado. SSH permitido automáticamente para prevenir bloqueo.'
+
         return result
+
+    def _ensure_ssh_allowed(self):
+        """Asegurar que SSH esté permitido antes de activar firewall"""
+        # Permitir SSH en el puerto 22
+        result1 = self._run_command('sudo ufw allow 22/tcp')
+        result2 = self._run_command('sudo ufw allow ssh')
+
+        if result1['success'] or result2['success']:
+            return {'success': True, 'message': 'SSH permitido'}
+        else:
+            return {'success': False, 'error': 'No se pudo permitir SSH'}
 
     def reset(self):
         """Resetear firewall a valores por defecto"""
