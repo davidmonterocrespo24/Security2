@@ -419,14 +419,14 @@ def internal_error(error):
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
-    host = os.getenv('HOST', '127.0.0.1')
+    host = os.getenv('HOST', '0.0.0.0')
     debug = os.getenv('FLASK_ENV') == 'development'
 
     print(f"""
-    ╔══════════════════════════════════════════════════════════╗
-    ║  Sistema de Administración de Seguridad para Ubuntu      ║
-    ║  Servidor: {host}:{port}                           ║
-    ╚══════════════════════════════════════════════════════════╝
+    ========================================================
+    Sistema de Administracion de Seguridad para Ubuntu
+    Servidor: {host}:{port}
+    ========================================================
     """)
 
     app.run(host=host, port=port, debug=debug)

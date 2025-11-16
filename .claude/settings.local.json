@@ -3,7 +3,8 @@
     "allow": [
       "Bash(if not exist .env copy .env.example .env)",
       "Bash(test -f .env)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []
