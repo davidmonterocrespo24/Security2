@@ -1,0 +1,29 @@
+# Jail para bloquear IPs que hagan demasiadas peticiones HTTP
+# Configuración AGRESIVA para detectar ataques rápidamente
+
+[nginx-req-limit]
+enabled = true
+port = http,https
+filter = nginx-req-limit-aggressive
+logpath = /var/log/nginx/access.log
+          /var/log/nginx/*/access.log
+
+# CONFIGURACIÓN AGRESIVA:
+# maxretry: Número de peticiones permitidas en el tiempo findtime
+# findtime: Ventana de tiempo en segundos para contar peticiones
+# bantime: Tiempo de bloqueo en segundos
+
+# Para bloquear después de 100 peticiones en 60 segundos:
+maxretry = 100
+findtime = 60
+bantime = 3600
+
+# Para ser MÁS AGRESIVO (50 peticiones en 30 segundos):
+# maxretry = 50
+# findtime = 30
+# bantime = 7200
+
+# Para ser MENOS AGRESIVO (200 peticiones en 60 segundos):
+# maxretry = 200
+# findtime = 60
+# bantime = 1800

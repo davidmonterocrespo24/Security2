@@ -289,3 +289,177 @@ bantime = {config.get('bantime', 3600)}
             jail_config['filter'] = config['filter']
 
         return self.update_jail_config(name, jail_config)
+
+    def get_available_filters(self):
+        """Obtener lista de filtros disponibles"""
+        if not self.fail2ban_available:
+            return []
+
+        try:
+            result = self._run_command('ls /etc/fail2ban/filter.d/*.conf')
+            if result['success']:
+                filters = []
+                for line in result['output'].split('\n'):
+                    if line:
+                        filter_name = os.path.basename(line).replace('.conf', '')
+                        filters.append(filter_name)
+                return sorted(filters)
+        except:
+            pass
+        return []
+
+    def create_nginx_rate_limit_jail(self, maxretry=100, findtime=60, bantime=3600, logpath='/var/log/nginx/access.log'):
+        """Crear jail para limitar peticiones HTTP desde el panel web"""
+        if not self.fail2ban_available:
+            return {'success': False, 'error': 'Fail2ban no disponible'}
+
+        try:
+            # 1. Crear filtro agresivo si no existe
+            filter_path = '/etc/fail2ban/filter.d/nginx-req-limit-aggressive.conf'
+            filter_content = """# Fail2ban filter para bloquear ataques DDoS/flooding
+# Creado desde el panel web
+
+[Definition]
+failregex = ^<HOST> -.*"(GET|POST|PUT|DELETE|HEAD|PATCH|OPTIONS).*HTTP.*"
+ignoreregex =
+
+[Init]
+datepattern = ^%%Y/%%m/%%d %%H:%%M:%%S
+"""
+
+            # Escribir filtro en /tmp y moverlo
+            with open('/tmp/nginx-req-limit-aggressive.conf', 'w') as f:
+                f.write(filter_content)
+
+            result = self._run_command(f'sudo mv /tmp/nginx-req-limit-aggressive.conf {filter_path}')
+            if not result['success']:
+                return {'success': False, 'error': 'No se pudo crear el filtro'}
+
+            # 2. Crear jail
+            jail_path = '/etc/fail2ban/jail.d/nginx-req-limit.local'
+            jail_content = f"""# Jail para bloquear IPs con demasiadas peticiones HTTP
+# Creado desde el panel web
+
+[nginx-req-limit]
+enabled = true
+port = http,https
+filter = nginx-req-limit-aggressive
+logpath = {logpath}
+maxretry = {maxretry}
+findtime = {findtime}
+bantime = {bantime}
+action = %(action_mwl)s
+"""
+
+            with open('/tmp/nginx-req-limit.local', 'w') as f:
+                f.write(jail_content)
+
+            result = self._run_command(f'sudo mv /tmp/nginx-req-limit.local {jail_path}')
+            if not result['success']:
+                return {'success': False, 'error': 'No se pudo crear la jail'}
+
+            # 3. Reiniciar fail2ban
+            restart_result = self._run_command('sudo systemctl restart fail2ban')
+            if not restart_result['success']:
+                return {'success': False, 'error': 'No se pudo reiniciar fail2ban'}
+
+            return {
+                'success': True,
+                'message': f'Jail nginx-req-limit creada exitosamente. Bloqueará IPs que hagan más de {maxretry} peticiones en {findtime} segundos.',
+                'config': {
+                    'maxretry': maxretry,
+                    'findtime': findtime,
+                    'bantime': bantime,
+                    'logpath': logpath
+                }
+            }
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def create_bot_blocker_jail(self, maxretry=50, findtime=300, bantime=7200, logpath='/var/log/nginx/access.log'):
+        """Crear jail para bloquear bots maliciosos desde el panel web"""
+        if not self.fail2ban_available:
+            return {'success': False, 'error': 'Fail2ban no disponible'}
+
+        try:
+            # 1. Crear filtro para bots
+            filter_path = '/etc/fail2ban/filter.d/http-bot-blocker.conf'
+            filter_content = """# Fail2ban filter para bloquear bots maliciosos
+# Creado desde el panel web
+
+[Definition]
+failregex = ^<HOST> -.*"(GET|POST).*".*"(bot|crawler|spider|scraper|curl|wget|python-requests|axios|nikto|sqlmap|nmap).*"
+ignoreregex = (Googlebot|bingbot|YandexBot|Baiduspider)
+"""
+
+            with open('/tmp/http-bot-blocker.conf', 'w') as f:
+                f.write(filter_content)
+
+            result = self._run_command(f'sudo mv /tmp/http-bot-blocker.conf {filter_path}')
+            if not result['success']:
+                return {'success': False, 'error': 'No se pudo crear el filtro de bots'}
+
+            # 2. Crear jail
+            jail_path = '/etc/fail2ban/jail.d/http-bot-blocker.local'
+            jail_content = f"""# Jail para bloquear bots maliciosos
+# Creado desde el panel web
+
+[http-bot-blocker]
+enabled = true
+port = http,https
+filter = http-bot-blocker
+logpath = {logpath}
+maxretry = {maxretry}
+findtime = {findtime}
+bantime = {bantime}
+action = %(action_mwl)s
+"""
+
+            with open('/tmp/http-bot-blocker.local', 'w') as f:
+                f.write(jail_content)
+
+            result = self._run_command(f'sudo mv /tmp/http-bot-blocker.local {jail_path}')
+            if not result['success']:
+                return {'success': False, 'error': 'No se pudo crear la jail de bots'}
+
+            # 3. Reiniciar fail2ban
+            restart_result = self._run_command('sudo systemctl restart fail2ban')
+            if not restart_result['success']:
+                return {'success': False, 'error': 'No se pudo reiniciar fail2ban'}
+
+            return {
+                'success': True,
+                'message': f'Jail http-bot-blocker creada exitosamente. Bloqueará bots maliciosos.',
+                'config': {
+                    'maxretry': maxretry,
+                    'findtime': findtime,
+                    'bantime': bantime,
+                    'logpath': logpath
+                }
+            }
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def get_jail_config(self, jail_name):
+        """Obtener configuración actual de una jail"""
+        if not self.fail2ban_available:
+            return None
+
+        jail_file = f'/etc/fail2ban/jail.d/{jail_name}.local'
+
+        try:
+            result = self._run_command(f'sudo cat {jail_file}')
+            if result['success']:
+                config = {}
+                for line in result['output'].split('\n'):
+                    line = line.strip()
+                    if '=' in line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        config[key.strip()] = value.strip()
+                return config
+        except:
+            pass
+
+        return None

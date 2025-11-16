@@ -18,6 +18,47 @@
     </div>
 </div>
 
+<!-- Configurar Protecciones -->
+<div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-lg p-6 mb-6 text-white">
+    <h3 class="text-2xl font-bold mb-4 flex items-center">
+        <i class="fas fa-shield-alt mr-3"></i>
+        Configurar Protecciones Automáticas
+    </h3>
+    <p class="mb-4 text-blue-100">Crea y configura jails de Fail2ban para proteger tu servidor contra ataques DDoS, flooding y bots maliciosos.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Protección contra DDoS -->
+        <div class="bg-white/10 backdrop-blur rounded-lg p-4">
+            <div class="flex items-start mb-3">
+                <i class="fas fa-tachometer-alt text-3xl mr-3"></i>
+                <div>
+                    <h4 class="font-bold text-lg">Límite de Peticiones HTTP</h4>
+                    <p class="text-sm text-blue-100">Bloquea IPs con demasiadas peticiones (DDoS/Flooding)</p>
+                </div>
+            </div>
+            <button onclick="showRateLimitConfig()" class="w-full px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition font-semibold">
+                <i class="fas fa-cog mr-2"></i>
+                Configurar
+            </button>
+        </div>
+
+        <!-- Protección contra Bots -->
+        <div class="bg-white/10 backdrop-blur rounded-lg p-4">
+            <div class="flex items-start mb-3">
+                <i class="fas fa-robot text-3xl mr-3"></i>
+                <div>
+                    <h4 class="font-bold text-lg">Bloqueo de Bots Maliciosos</h4>
+                    <p class="text-sm text-blue-100">Detecta y bloquea scrapers, crawlers y bots maliciosos</p>
+                </div>
+            </div>
+            <button onclick="showBotBlockerConfig()" class="w-full px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition font-semibold">
+                <i class="fas fa-cog mr-2"></i>
+                Configurar
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Ban IP Manually -->
 <div class="bg-white rounded-lg shadow-md p-6 mb-6">
     <h3 class="text-xl font-bold mb-4 flex items-center">
@@ -38,6 +79,162 @@
             <i class="fas fa-ban mr-2"></i>
             Bloquear
         </button>
+    </div>
+</div>
+
+<!-- Modal: Configurar Rate Limit -->
+<div id="rateLimitModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-2xl font-bold flex items-center">
+                <i class="fas fa-tachometer-alt mr-3 text-blue-600"></i>
+                Configurar Límite de Peticiones HTTP
+            </h3>
+            <button onclick="closeRateLimitConfig()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+
+        <div class="bg-yellow-50 border-l-4 border-yellow-600 p-4 mb-6">
+            <p class="text-yellow-800 text-sm">
+                <i class="fas fa-info-circle mr-2"></i>
+                Esta jail bloqueará automáticamente IPs que hagan demasiadas peticiones HTTP en poco tiempo.
+            </p>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Máximo de Peticiones (maxretry)
+                </label>
+                <input type="number" id="rateLimit-maxretry" value="100" min="10" max="1000"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-600 mt-1">Número de peticiones permitidas antes de bloquear</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Tiempo de Ventana (findtime) - segundos
+                </label>
+                <input type="number" id="rateLimit-findtime" value="60" min="10" max="600"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-600 mt-1">Ventana de tiempo para contar las peticiones</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Tiempo de Bloqueo (bantime) - segundos
+                </label>
+                <input type="number" id="rateLimit-bantime" value="3600" min="60" max="86400"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-600 mt-1">Duración del bloqueo (3600 = 1 hora)</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Ruta del Log de Nginx
+                </label>
+                <input type="text" id="rateLimit-logpath" value="/var/log/nginx/access.log"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-600 mt-1">Ubicación del log de acceso de Nginx</p>
+            </div>
+
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <p class="text-sm text-blue-800">
+                    <strong>Resumen:</strong> Bloqueará IPs que hagan más de <span id="summary-maxretry">100</span> peticiones
+                    en <span id="summary-findtime">60</span> segundos, por <span id="summary-bantime">3600</span> segundos.
+                </p>
+            </div>
+        </div>
+
+        <div class="flex gap-4 mt-6">
+            <button onclick="createRateLimitJail()" class="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                <i class="fas fa-plus mr-2"></i>
+                Crear Jail
+            </button>
+            <button onclick="closeRateLimitConfig()" class="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold">
+                Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Configurar Bot Blocker -->
+<div id="botBlockerModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-2xl font-bold flex items-center">
+                <i class="fas fa-robot mr-3 text-blue-600"></i>
+                Configurar Bloqueo de Bots Maliciosos
+            </h3>
+            <button onclick="closeBotBlockerConfig()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+
+        <div class="bg-yellow-50 border-l-4 border-yellow-600 p-4 mb-6">
+            <p class="text-yellow-800 text-sm">
+                <i class="fas fa-info-circle mr-2"></i>
+                Esta jail detectará y bloqueará bots maliciosos basándose en el User-Agent. No bloqueará bots legítimos como Googlebot.
+            </p>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Máximo de Peticiones (maxretry)
+                </label>
+                <input type="number" id="botBlocker-maxretry" value="50" min="10" max="500"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-600 mt-1">Número de peticiones de bot permitidas antes de bloquear</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Tiempo de Ventana (findtime) - segundos
+                </label>
+                <input type="number" id="botBlocker-findtime" value="300" min="60" max="1800"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-600 mt-1">Ventana de tiempo para contar las peticiones de bots</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Tiempo de Bloqueo (bantime) - segundos
+                </label>
+                <input type="number" id="botBlocker-bantime" value="7200" min="3600" max="86400"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-600 mt-1">Duración del bloqueo (7200 = 2 horas)</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Ruta del Log de Nginx
+                </label>
+                <input type="text" id="botBlocker-logpath" value="/var/log/nginx/access.log"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-600 mt-1">Ubicación del log de acceso de Nginx</p>
+            </div>
+
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <p class="text-sm text-blue-800">
+                    <strong>Bots detectados:</strong> curl, wget, python-requests, axios, scrapers, nikto, sqlmap, nmap, etc.
+                </p>
+                <p class="text-sm text-green-800 mt-2">
+                    <strong>Bots permitidos:</strong> Googlebot, Bingbot, YandexBot, Baiduspider
+                </p>
+            </div>
+        </div>
+
+        <div class="flex gap-4 mt-6">
+            <button onclick="createBotBlockerJail()" class="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                <i class="fas fa-plus mr-2"></i>
+                Crear Jail
+            </button>
+            <button onclick="closeBotBlockerConfig()" class="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold">
+                Cancelar
+            </button>
+        </div>
     </div>
 </div>
 
@@ -307,5 +504,123 @@
         loadJails();
         loadBannedIPs();
     }, 30000);
+
+    // ========== Funciones para Configurar Protecciones ==========
+
+    function showRateLimitConfig() {
+        document.getElementById('rateLimitModal').classList.remove('hidden');
+        document.getElementById('rateLimitModal').classList.add('flex');
+
+        // Actualizar resumen en tiempo real
+        ['maxretry', 'findtime', 'bantime'].forEach(field => {
+            document.getElementById(`rateLimit-${field}`).addEventListener('input', updateRateLimitSummary);
+        });
+    }
+
+    function closeRateLimitConfig() {
+        document.getElementById('rateLimitModal').classList.add('hidden');
+        document.getElementById('rateLimitModal').classList.remove('flex');
+    }
+
+    function updateRateLimitSummary() {
+        document.getElementById('summary-maxretry').textContent = document.getElementById('rateLimit-maxretry').value;
+        document.getElementById('summary-findtime').textContent = document.getElementById('rateLimit-findtime').value;
+        document.getElementById('summary-bantime').textContent = document.getElementById('rateLimit-bantime').value;
+    }
+
+    async function createRateLimitJail() {
+        const maxretry = parseInt(document.getElementById('rateLimit-maxretry').value);
+        const findtime = parseInt(document.getElementById('rateLimit-findtime').value);
+        const bantime = parseInt(document.getElementById('rateLimit-bantime').value);
+        const logpath = document.getElementById('rateLimit-logpath').value;
+
+        if (!confirm(`¿Crear jail para bloquear IPs que hagan más de ${maxretry} peticiones en ${findtime} segundos?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/fail2ban/create-rate-limit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ maxretry, findtime, bantime, logpath })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(result.message, 'success');
+                closeRateLimitConfig();
+                setTimeout(() => {
+                    loadJails();
+                }, 2000);
+            } else {
+                showNotification('Error: ' + (result.error || 'No se pudo crear la jail'), 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al crear la jail', 'error');
+        }
+    }
+
+    function showBotBlockerConfig() {
+        document.getElementById('botBlockerModal').classList.remove('hidden');
+        document.getElementById('botBlockerModal').classList.add('flex');
+    }
+
+    function closeBotBlockerConfig() {
+        document.getElementById('botBlockerModal').classList.add('hidden');
+        document.getElementById('botBlockerModal').classList.remove('flex');
+    }
+
+    async function createBotBlockerJail() {
+        const maxretry = parseInt(document.getElementById('botBlocker-maxretry').value);
+        const findtime = parseInt(document.getElementById('botBlocker-findtime').value);
+        const bantime = parseInt(document.getElementById('botBlocker-bantime').value);
+        const logpath = document.getElementById('botBlocker-logpath').value;
+
+        if (!confirm(`¿Crear jail para bloquear bots maliciosos?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/fail2ban/create-bot-blocker', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ maxretry, findtime, bantime, logpath })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(result.message, 'success');
+                closeBotBlockerConfig();
+                setTimeout(() => {
+                    loadJails();
+                }, 2000);
+            } else {
+                showNotification('Error: ' + (result.error || 'No se pudo crear la jail'), 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al crear la jail de bots', 'error');
+        }
+    }
+
+    // Cerrar modales al hacer clic fuera
+    window.onclick = function(event) {
+        const rateLimitModal = document.getElementById('rateLimitModal');
+        const botBlockerModal = document.getElementById('botBlockerModal');
+
+        if (event.target == rateLimitModal) {
+            closeRateLimitConfig();
+        }
+        if (event.target == botBlockerModal) {
+            closeBotBlockerConfig();
+        }
+    }
 </script>
 {% endblock %}

@@ -1,0 +1,24 @@
+# Jail SUPER AGRESIVO para bloquear ataques DDoS inmediatamente
+# ¡CUIDADO! Esta configuración puede bloquear usuarios legítimos
+
+[nginx-req-limit-super]
+enabled = false  # Cambiar a true para activar
+port = http,https
+filter = nginx-req-limit-aggressive
+logpath = /var/log/nginx/access.log
+          /var/log/nginx/*/access.log
+
+# CONFIGURACIÓN SUPER AGRESIVA:
+# Bloquear después de 30 peticiones en 10 segundos
+maxretry = 30
+findtime = 10
+bantime = 14400  # 4 horas
+
+# Acción al banear
+action = %(action_mwl)s
+         %(action_)s
+
+# Enviar email cuando se banee (opcional)
+# destemail = admin@tudominio.com
+# sender = fail2ban@tudominio.com
+# mta = sendmail

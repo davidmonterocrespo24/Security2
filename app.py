@@ -304,6 +304,7 @@ def toggle_jail():
 
 
 @app.route('/api/fail2ban/jail/config', methods=['POST'])
+@login_required
 def update_jail_config():
     """Actualizar configuración de jail"""
     data = request.json
@@ -311,6 +312,62 @@ def update_jail_config():
     config = data.get('config')
     result = fail2ban_manager.update_jail_config(jail, config)
     return jsonify(result)
+
+
+@app.route('/api/fail2ban/jail/config/<jail_name>', methods=['GET'])
+@login_required
+def get_jail_config_api(jail_name):
+    """Obtener configuración de una jail"""
+    config = fail2ban_manager.get_jail_config(jail_name)
+    if config:
+        return jsonify({'success': True, 'config': config})
+    return jsonify({'success': False, 'error': 'Jail no encontrada'})
+
+
+@app.route('/api/fail2ban/create-rate-limit', methods=['POST'])
+@login_required
+def create_rate_limit_jail():
+    """Crear jail para limitar peticiones HTTP (protección DDoS/flooding)"""
+    data = request.json
+    maxretry = data.get('maxretry', 100)
+    findtime = data.get('findtime', 60)
+    bantime = data.get('bantime', 3600)
+    logpath = data.get('logpath', '/var/log/nginx/access.log')
+
+    result = fail2ban_manager.create_nginx_rate_limit_jail(
+        maxretry=maxretry,
+        findtime=findtime,
+        bantime=bantime,
+        logpath=logpath
+    )
+    return jsonify(result)
+
+
+@app.route('/api/fail2ban/create-bot-blocker', methods=['POST'])
+@login_required
+def create_bot_blocker_jail():
+    """Crear jail para bloquear bots maliciosos"""
+    data = request.json
+    maxretry = data.get('maxretry', 50)
+    findtime = data.get('findtime', 300)
+    bantime = data.get('bantime', 7200)
+    logpath = data.get('logpath', '/var/log/nginx/access.log')
+
+    result = fail2ban_manager.create_bot_blocker_jail(
+        maxretry=maxretry,
+        findtime=findtime,
+        bantime=bantime,
+        logpath=logpath
+    )
+    return jsonify(result)
+
+
+@app.route('/api/fail2ban/filters', methods=['GET'])
+@login_required
+def get_available_filters():
+    """Obtener lista de filtros disponibles"""
+    filters = fail2ban_manager.get_available_filters()
+    return jsonify({'filters': filters})
 
 
 # --- Logs ---

@@ -5,7 +5,52 @@
 ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-Sistema completo de administración y monitoreo de seguridad para servidores Ubuntu con Odoo, PostgreSQL y Nginx. Incluye protección contra ataques de fuerza bruta, detección de bots, análisis de logs, gestión de firewall y más.
+Sistema completo de administración y monitoreo de seguridad para servidores Ubuntu con Odoo, PostgreSQL y Nginx. Incluye protección contra ataques de fuerza bruta, detección de bots, análisis de logs, gestión de firewall, **sistema de login** y más.
+
+## 🚀 Inicio Rápido
+
+### 1. Instalar en tu Servidor Ubuntu
+
+```bash
+# Copiar archivos al servidor
+scp -r * tu-usuario@tu-servidor:/opt/security-system/
+
+# En el servidor
+cd /opt/security-system
+sudo bash deploy_to_server.sh
+```
+
+### 2. Acceder al Panel Web
+
+Desde **cualquier navegador** (Windows, Mac, Linux, teléfono):
+
+```
+http://IP-DE-TU-SERVIDOR:5000
+```
+
+**Credenciales por defecto:**
+- Usuario: `admin`
+- Contraseña: `Montero25`
+
+Ver: [LOGIN_INFO.md](LOGIN_INFO.md) para más detalles.
+
+### 3. Configurar Protecciones desde el Panel Web
+
+**¡NUEVA FUNCIONALIDAD!** Ahora puedes configurar **todo desde el navegador**:
+
+✅ **Límite de Peticiones HTTP** - Bloquea ataques DDoS/flooding
+✅ **Bloqueo de Bots Maliciosos** - Detecta scrapers y herramientas de hacking
+✅ **Gestión de IPs** - Bloquea/desbloquea IPs con un clic
+✅ **Estadísticas en Tiempo Real** - Ve quién está siendo bloqueado
+
+**Ver: [WEB_PANEL_GUIDE.md](WEB_PANEL_GUIDE.md)** ← **¡GUÍA COMPLETA DEL PANEL WEB!**
+
+### 4. Configuración Manual (Opcional)
+
+Si prefieres la línea de comandos:
+- [SOLUCION_RAPIDA.md](SOLUCION_RAPIDA.md) - Solución rápida para bloqueo de IPs
+- [FAIL2BAN_SETUP.md](FAIL2BAN_SETUP.md) - Configuración manual detallada
+- [UBUNTU_DEPLOYMENT.md](UBUNTU_DEPLOYMENT.md) - Despliegue completo
 
 ## Características Principales
 
