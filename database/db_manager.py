@@ -547,3 +547,279 @@ class DatabaseManager:
             return False
         finally:
             session.close()
+
+    # ==================== MÉTODOS ADICIONALES PARA ML Y API ====================
+
+    def get_security_events(self, limit=100, severity=None, event_type=None):
+        """Obtener eventos de seguridad con filtros opcionales"""
+        session = self.get_session()
+        try:
+            query = session.query(SecurityEvent)
+
+            if severity:
+                query = query.filter(SecurityEvent.severity == severity)
+
+            if event_type:
+                query = query.filter(SecurityEvent.event_type == event_type)
+
+            events = query.order_by(SecurityEvent.timestamp.desc()).limit(limit).all()
+            return [e.to_dict() for e in events]
+        finally:
+            session.close()
+
+    def get_event_by_id(self, event_id):
+        """Obtener evento específico por ID"""
+        session = self.get_session()
+        try:
+            event = session.query(SecurityEvent).filter_by(id=event_id).first()
+            return event.to_dict() if event else None
+        finally:
+            session.close()
+
+    def get_alerts(self, status='pending', severity=None, limit=50):
+        """Obtener alertas con filtros"""
+        session = self.get_session()
+        try:
+            query = session.query(Alert)
+
+            if status == 'pending':
+                query = query.filter(Alert.is_resolved == False)
+            elif status == 'resolved':
+                query = query.filter(Alert.is_resolved == True)
+            elif status == 'dismissed':
+                query = query.filter(Alert.is_read == True, Alert.is_resolved == False)
+
+            if severity:
+                query = query.filter(Alert.severity == severity)
+
+            alerts = query.order_by(Alert.created_at.desc()).limit(limit).all()
+            return [a.to_dict() for a in alerts]
+        finally:
+            session.close()
+
+    def resolve_alert(self, alert_id, resolved_by, resolution_notes=''):
+        """Resolver una alerta"""
+        session = self.get_session()
+        try:
+            alert = session.query(Alert).filter_by(id=alert_id).first()
+            if alert:
+                alert.is_resolved = True
+                alert.resolved_at = datetime.utcnow()
+                alert.resolved_by = resolved_by
+                alert.action_taken = resolution_notes
+                alert.is_read = True
+                session.commit()
+                return True
+            return False
+        finally:
+            session.close()
+
+    def dismiss_alert(self, alert_id):
+        """Descartar una alerta (marcar como leída sin resolver)"""
+        session = self.get_session()
+        try:
+            alert = session.query(Alert).filter_by(id=alert_id).first()
+            if alert:
+                alert.is_read = True
+                session.commit()
+                return True
+            return False
+        finally:
+            session.close()
+
+    def block_ip(self, ip_address, reason, blocked_by='manual', duration_hours=24, jail_name=None, threat_level='medium'):
+        """Bloquear una IP con duración"""
+        session = self.get_session()
+        try:
+            # Calcular tiempo de desbloqueo
+            unblock_time = datetime.utcnow() + timedelta(hours=duration_hours) if duration_hours else None
+            is_permanent = duration_hours is None or duration_hours <= 0
+
+            # Verificar si ya está bloqueada
+            existing = session.query(BlockedIP).filter_by(ip_address=ip_address).first()
+
+            if existing:
+                # Actualizar existente
+                existing.last_blocked = datetime.utcnow()
+                existing.total_attacks += 1
+                existing.reason = reason
+                existing.threat_level = threat_level
+                existing.is_permanent = is_permanent
+                existing.unblock_time = unblock_time
+            else:
+                # Crear nuevo
+                blocked_ip = BlockedIP(
+                    ip_address=ip_address,
+                    blocked_by=blocked_by,
+                    jail_name=jail_name,
+                    reason=reason,
+                    threat_level=threat_level,
+                    is_permanent=is_permanent,
+                    unblock_time=unblock_time
+                )
+                session.add(blocked_ip)
+
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error blocking IP: {e}")
+            return False
+        finally:
+            session.close()
+
+    def get_blocked_ips(self, ip=None, include_expired=False):
+        """Obtener IPs bloqueadas"""
+        session = self.get_session()
+        try:
+            query = session.query(BlockedIP)
+
+            if ip:
+                query = query.filter(BlockedIP.ip_address == ip)
+
+            if not include_expired:
+                now = datetime.utcnow()
+                query = query.filter(
+                    or_(
+                        BlockedIP.is_permanent == True,
+                        BlockedIP.unblock_time == None,
+                        BlockedIP.unblock_time > now
+                    )
+                )
+
+            blocked_ips = query.order_by(BlockedIP.last_blocked.desc()).all()
+            return [ip.to_dict() for ip in blocked_ips]
+        finally:
+            session.close()
+
+    def add_to_whitelist(self, ip_address, reason, added_by):
+        """Agregar IP a whitelist"""
+        session = self.get_session()
+        try:
+            existing = session.query(IPWhitelist).filter_by(ip_address=ip_address).first()
+
+            if existing:
+                existing.is_active = True
+                existing.reason = reason
+            else:
+                whitelist = IPWhitelist(
+                    ip_address=ip_address,
+                    reason=reason,
+                    added_by=added_by,
+                    is_active=True
+                )
+                session.add(whitelist)
+
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error adding to whitelist: {e}")
+            return False
+        finally:
+            session.close()
+
+    def remove_from_whitelist(self, ip_address):
+        """Remover IP de whitelist"""
+        session = self.get_session()
+        try:
+            whitelist = session.query(IPWhitelist).filter_by(ip_address=ip_address).first()
+            if whitelist:
+                session.delete(whitelist)
+                session.commit()
+                return True
+            return False
+        finally:
+            session.close()
+
+    def get_whitelist(self):
+        """Obtener whitelist completa"""
+        session = self.get_session()
+        try:
+            whitelist = session.query(IPWhitelist).filter_by(is_active=True).all()
+            return [w.to_dict() for w in whitelist]
+        finally:
+            session.close()
+
+    def add_to_blacklist(self, ip_address, reason, added_by):
+        """Agregar IP a blacklist"""
+        session = self.get_session()
+        try:
+            existing = session.query(IPBlacklist).filter_by(ip_address=ip_address).first()
+
+            if existing:
+                existing.is_active = True
+                existing.reason = reason
+            else:
+                blacklist = IPBlacklist(
+                    ip_address=ip_address,
+                    reason=reason,
+                    added_by=added_by,
+                    is_active=True,
+                    threat_score=100
+                )
+                session.add(blacklist)
+
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error adding to blacklist: {e}")
+            return False
+        finally:
+            session.close()
+
+    def get_blacklist(self):
+        """Obtener blacklist completa"""
+        session = self.get_session()
+        try:
+            blacklist = session.query(IPBlacklist).filter_by(is_active=True).all()
+            return [b.to_dict() for b in blacklist]
+        finally:
+            session.close()
+
+    def get_dashboard_stats(self):
+        """Obtener estadísticas del dashboard mejoradas"""
+        session = self.get_session()
+        try:
+            # Eventos últimas 24h
+            day_ago = datetime.utcnow() - timedelta(hours=24)
+            total_events_24h = session.query(func.count(SecurityEvent.id)).filter(
+                SecurityEvent.timestamp >= day_ago
+            ).scalar()
+
+            critical_events_24h = session.query(func.count(SecurityEvent.id)).filter(
+                and_(
+                    SecurityEvent.timestamp >= day_ago,
+                    SecurityEvent.severity == 'critical'
+                )
+            ).scalar()
+
+            # IPs bloqueadas
+            total_blocked_ips = session.query(func.count(BlockedIP.id)).filter(
+                or_(
+                    BlockedIP.is_permanent == True,
+                    BlockedIP.unblock_time > datetime.utcnow()
+                )
+            ).scalar()
+
+            # Amenazas activas
+            active_threats = session.query(func.count(Threat.id)).filter(
+                Threat.is_resolved == False
+            ).scalar()
+
+            # Alertas pendientes
+            pending_alerts = session.query(func.count(Alert.id)).filter(
+                Alert.is_resolved == False
+            ).scalar()
+
+            return {
+                'total_events_24h': total_events_24h or 0,
+                'critical_events_24h': critical_events_24h or 0,
+                'total_blocked_ips': total_blocked_ips or 0,
+                'blocked_ips': total_blocked_ips or 0,  # Alias
+                'active_threats': active_threats or 0,
+                'pending_alerts': pending_alerts or 0
+            }
+        finally:
+            session.close()
