@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block title %}Fail2ban - Sistema de Seguridad{% endblock %}
+{% block header %}Gestión de Fail2ban{% endblock %}
+
+{% block content %}
+<!-- Fail2ban Status -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h3 class="text-xl font-bold mb-2">Estado de Fail2ban</h3>
+            <p class="text-gray-600" id="fail2ban-status-text">Verificando...</p>
+        </div>
+        <div id="fail2ban-status-badge" class="px-4 py-2 rounded-full font-semibold">
+            <i class="fas fa-circle mr-2"></i>
+            <span>Desconocido</span>
+        </div>
+    </div>
+</div>
+
+<!-- Ban IP Manually -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-ban mr-2 text-red-600"></i>
+        Bloquear IP Manualmente
+    </h3>
+
+    <div class="flex gap-4">
+        <input type="text" id="ban-ip-input" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="192.168.1.100">
+
+        <select id="ban-jail-select" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+            <option value="sshd">SSH</option>
+            <option value="nginx-req-limit">Nginx</option>
+            <option value="http-bot-blocker">Bot Blocker</option>
+        </select>
+
+        <button onclick="banIP()" class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+            <i class="fas fa-ban mr-2"></i>
+            Bloquear
+        </button>
+    </div>
+</div>
+
+<!-- Jails -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+    <div id="jails-container">
+        <!-- Se llenará dinámicamente -->
+    </div>
+</div>
+
+<!-- Banned IPs -->
+<div class="bg-white rounded-lg shadow-md p-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-bold flex items-center">
+            <i class="fas fa-list mr-2 text-blue-600"></i>
+            IPs Bloqueadas
+        </h3>
+
+        <select id="jail-filter" onchange="loadBannedIPs()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+            <option value="sshd">SSH</option>
+            <option value="nginx-req-limit">Nginx</option>
+            <option value="http-bot-blocker">Bot Blocker</option>
+        </select>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jail</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="banned-ips" class="bg-white divide-y divide-gray-200">
+                <!-- Se llenará dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadFail2banStatus() {
+        try {
+            const response = await fetch('/api/fail2ban/status');
+            const status = await response.json();
+
+            const badge = document.getElementById('fail2ban-status-badge');
+
+            if (status.running) {
+                document.getElementById('fail2ban-status-text').textContent = 'Fail2ban está activo y protegiendo el sistema';
+                badge.className = 'px-4 py-2 bg-green-100 text-green-800 rounded-full font-semibold';
+                badge.innerHTML = '<i class="fas fa-circle mr-2"></i><span>Activo</span>';
+            } else {
+                document.getElementById('fail2ban-status-text').textContent = status.available ? 'Fail2ban está detenido' : 'Fail2ban no está instalado';
+                badge.className = 'px-4 py-2 bg-red-100 text-red-800 rounded-full font-semibold';
+                badge.innerHTML = '<i class="fas fa-circle mr-2"></i><span>Inactivo</span>';
+            }
+
+        } catch (error) {
+            console.error('Error loading fail2ban status:', error);
+        }
+    }
+
+    async function loadJails() {
+        try {
+            const response = await fetch('/api/fail2ban/jails');
+            const data = await response.json();
+
+            const container = document.getElementById('jails-container');
+            container.innerHTML = '';
+
+            if (!data.jails || data.jails.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 col-span-3">No hay jails configuradas</p>';
+                return;
+            }
+
+            data.jails.forEach(jail => {
+                const div = document.createElement('div');
+                div.className = 'bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500';
+                div.innerHTML = `
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-bold text-lg">${jail.name}</h4>
+                        <span class="px-3 py-1 ${jail.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} rounded-full text-xs font-semibold">
+                            ${jail.enabled ? 'Activo' : 'Inactivo'}
+                        </span>
+                    </div>
+
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">IPs Bloqueadas:</span>
+                            <span class="font-bold text-red-600">${jail.banned_count || 0}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Total Bloqueadas:</span>
+                            <span class="font-bold">${jail.total_banned || 0}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Intentos Fallidos:</span>
+                            <span class="font-bold">${jail.total_failed || 0}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <button onclick="toggleJail('${jail.name}', ${!jail.enabled})" class="w-full px-4 py-2 ${jail.enabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white rounded-lg transition text-sm">
+                            <i class="fas fa-power-off mr-2"></i>
+                            ${jail.enabled ? 'Desactivar' : 'Activar'}
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+        } catch (error) {
+            console.error('Error loading jails:', error);
+        }
+    }
+
+    async function loadBannedIPs() {
+        const jail = document.getElementById('jail-filter').value;
+
+        try {
+            const response = await fetch(`/api/fail2ban/banned-ips?jail=${jail}`);
+            const data = await response.json();
+
+            const tbody = document.getElementById('banned-ips');
+            tbody.innerHTML = '';
+
+            if (!data.ips || data.ips.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">No hay IPs bloqueadas</td></tr>';
+                return;
+            }
+
+            data.ips.forEach(ip => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${ip}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">${jail}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <button onclick="unbanIP('${ip}', '${jail}')" class="text-green-600 hover:text-green-800">
+                            <i class="fas fa-unlock mr-1"></i>
+                            Desbloquear
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+        } catch (error) {
+            console.error('Error loading banned IPs:', error);
+        }
+    }
+
+    async function banIP() {
+        const ip = document.getElementById('ban-ip-input').value.trim();
+        const jail = document.getElementById('ban-jail-select').value;
+
+        if (!ip) {
+            showNotification('Por favor ingresa una IP', 'warning');
+            return;
+        }
+
+        // Validar formato IP
+        const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+        if (!ipRegex.test(ip)) {
+            showNotification('Formato de IP inválido', 'error');
+            return;
+        }
+
+        if (!confirm(`¿Bloquear la IP ${ip}?`)) return;
+
+        try {
+            const response = await fetch('/api/fail2ban/ban', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ip, jail })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(`IP ${ip} bloqueada`, 'success');
+                document.getElementById('ban-ip-input').value = '';
+                loadJails();
+                loadBannedIPs();
+            } else {
+                showNotification('Error al bloquear IP', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al bloquear IP', 'error');
+        }
+    }
+
+    async function unbanIP(ip, jail) {
+        if (!confirm(`¿Desbloquear la IP ${ip}?`)) return;
+
+        try {
+            const response = await fetch('/api/fail2ban/unban', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ip, jail })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(`IP ${ip} desbloqueada`, 'success');
+                loadJails();
+                loadBannedIPs();
+            } else {
+                showNotification('Error al desbloquear IP', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al desbloquear IP', 'error');
+        }
+    }
+
+    async function toggleJail(jail, enable) {
+        const action = enable ? 'activar' : 'desactivar';
+
+        if (!confirm(`¿${action.charAt(0).toUpperCase() + action.slice(1)} la jail ${jail}?`)) return;
+
+        try {
+            const response = await fetch('/api/fail2ban/jail/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ jail, enable })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(`Jail ${jail} ${enable ? 'activada' : 'desactivada'}`, 'success');
+                loadJails();
+            } else {
+                showNotification(`Error al ${action} jail`, 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification(`Error al ${action} jail`, 'error');
+        }
+    }
+
+    // Cargar datos al iniciar
+    document.addEventListener('DOMContentLoaded', () => {
+        loadFail2banStatus();
+        loadJails();
+        loadBannedIPs();
+    });
+
+    // Actualizar cada 30 segundos
+    setInterval(() => {
+        loadFail2banStatus();
+        loadJails();
+        loadBannedIPs();
+    }, 30000);
+</script>
+{% endblock %}

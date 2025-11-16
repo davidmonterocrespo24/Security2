@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Amenazas - Sistema de Seguridad{% endblock %}
+{% block header %}Detección de Amenazas{% endblock %}
+
+{% block content %}
+<!-- Scan Button -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h3 class="text-xl font-bold mb-2">Escaneo de Amenazas</h3>
+            <p class="text-gray-600">Analiza el sistema en busca de actividad sospechosa, ataques y vulnerabilidades</p>
+        </div>
+        <button onclick="scanThreats()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+            <i class="fas fa-search mr-2"></i>
+            Escanear Ahora
+        </button>
+    </div>
+</div>
+
+<!-- Threat Stats -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+        <h4 class="text-sm font-medium text-gray-600 mb-2">Amenazas Críticas</h4>
+        <p class="text-3xl font-bold text-red-600" id="critical-threats">0</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+        <h4 class="text-sm font-medium text-gray-600 mb-2">Amenazas Medias</h4>
+        <p class="text-3xl font-bold text-yellow-600" id="medium-threats">0</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+        <h4 class="text-sm font-medium text-gray-600 mb-2">Amenazas Resueltas</h4>
+        <p class="text-3xl font-bold text-green-600" id="resolved-threats">0</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="flex gap-4">
+        <button onclick="filterThreats('all')" id="filter-all" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm">
+            Todas
+        </button>
+        <button onclick="filterThreats('high')" id="filter-high" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold text-sm">
+            Alta Severidad
+        </button>
+        <button onclick="filterThreats('medium')" id="filter-medium" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold text-sm">
+            Media Severidad
+        </button>
+        <button onclick="filterThreats('unresolved')" id="filter-unresolved" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold text-sm">
+            Sin Resolver
+        </button>
+    </div>
+</div>
+
+<!-- Threats List -->
+<div id="threats-list" class="space-y-4">
+    <!-- Se llenará dinámicamente -->
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allThreats = [];
+    let currentFilter = 'all';
+
+    async function scanThreats() {
+        showNotification('Escaneando amenazas...', 'info');
+
+        try {
+            const response = await fetch('/api/threats/scan', {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            showNotification(`Escaneo completado: ${result.threats_found} amenazas encontradas`, 'success');
+            loadThreats();
+
+        } catch (error) {
+            console.error('Error scanning threats:', error);
+            showNotification('Error al escanear amenazas', 'error');
+        }
+    }
+
+    async function loadThreats() {
+        try {
+            const response = await fetch('/api/threats/list');
+            const data = await response.json();
+
+            allThreats = data.threats || [];
+            updateStats();
+            filterThreats(currentFilter);
+
+        } catch (error) {
+            console.error('Error loading threats:', error);
+        }
+    }
+
+    function updateStats() {
+        const critical = allThreats.filter(t => t.severity === 'high' && !t.resolved).length;
+        const medium = allThreats.filter(t => t.severity === 'medium' && !t.resolved).length;
+        const resolved = allThreats.filter(t => t.resolved).length;
+
+        document.getElementById('critical-threats').textContent = critical;
+        document.getElementById('medium-threats').textContent = medium;
+        document.getElementById('resolved-threats').textContent = resolved;
+    }
+
+    function filterThreats(filter) {
+        currentFilter = filter;
+
+        // Actualizar botones
+        const buttons = ['all', 'high', 'medium', 'unresolved'];
+        buttons.forEach(btn => {
+            const element = document.getElementById(`filter-${btn}`);
+            if (btn === filter) {
+                element.className = 'px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm';
+            } else {
+                element.className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold text-sm';
+            }
+        });
+
+        let filtered = allThreats;
+
+        if (filter === 'high') {
+            filtered = allThreats.filter(t => t.severity === 'high');
+        } else if (filter === 'medium') {
+            filtered = allThreats.filter(t => t.severity === 'medium');
+        } else if (filter === 'unresolved') {
+            filtered = allThreats.filter(t => !t.resolved);
+        }
+
+        displayThreats(filtered);
+    }
+
+    function displayThreats(threats) {
+        const container = document.getElementById('threats-list');
+        container.innerHTML = '';
+
+        if (threats.length === 0) {
+            container.innerHTML = `
+                <div class="bg-white rounded-lg shadow-md p-12 text-center">
+                    <i class="fas fa-shield-alt text-6xl text-green-500 mb-4"></i>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">No se encontraron amenazas</h3>
+                    <p class="text-gray-600">El sistema está protegido</p>
+                </div>
+            `;
+            return;
+        }
+
+        threats.forEach(threat => {
+            const severityColors = {
+                'high': 'border-red-500 bg-red-50',
+                'medium': 'border-yellow-500 bg-yellow-50',
+                'low': 'border-blue-500 bg-blue-50'
+            };
+
+            const severityBadge = {
+                'high': 'bg-red-100 text-red-800',
+                'medium': 'bg-yellow-100 text-yellow-800',
+                'low': 'bg-blue-100 text-blue-800'
+            };
+
+            const typeIcons = {
+                'ssh_bruteforce': 'fa-key',
+                'possible_scraping': 'fa-spider',
+                'malicious_bot': 'fa-robot',
+                'brute_force_attack': 'fa-shield-alt',
+                'vulnerability_scan': 'fa-search',
+                'sql_injection_attempt': 'fa-database',
+                'xss_attempt': 'fa-code'
+            };
+
+            const div = document.createElement('div');
+            div.className = `bg-white rounded-lg shadow-md p-6 border-l-4 ${severityColors[threat.severity] || 'border-gray-500'}`;
+
+            div.innerHTML = `
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-start">
+                        <i class="fas ${typeIcons[threat.type] || 'fa-exclamation-triangle'} text-2xl mr-4 mt-1 ${threat.severity === 'high' ? 'text-red-600' : 'text-yellow-600'}"></i>
+                        <div>
+                            <h4 class="text-lg font-bold text-gray-800 mb-1">${formatThreatType(threat.type)}</h4>
+                            <p class="text-sm text-gray-600">${threat.timestamp || 'Hace un momento'}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-3 py-1 ${severityBadge[threat.severity] || 'bg-gray-100 text-gray-800'} rounded-full text-xs font-semibold uppercase">
+                            ${threat.severity}
+                        </span>
+                        ${threat.resolved ? '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">RESUELTO</span>' : ''}
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg p-4 mb-4">
+                    <h5 class="font-semibold text-gray-700 mb-2">Detalles:</h5>
+                    <pre class="text-sm text-gray-700 whitespace-pre-wrap">${JSON.stringify(threat.details, null, 2)}</pre>
+                </div>
+
+                ${!threat.resolved ? `
+                    <button onclick="resolveThreat(${threat.id})" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm">
+                        <i class="fas fa-check mr-2"></i>
+                        Marcar como Resuelto
+                    </button>
+                ` : ''}
+            `;
+
+            container.appendChild(div);
+        });
+    }
+
+    function formatThreatType(type) {
+        const types = {
+            'ssh_bruteforce': 'Ataque de Fuerza Bruta SSH',
+            'possible_scraping': 'Posible Scraping',
+            'malicious_bot': 'Bot Malicioso',
+            'brute_force_attack': 'Ataque de Fuerza Bruta',
+            'vulnerability_scan': 'Escaneo de Vulnerabilidades',
+            'sql_injection_attempt': 'Intento de Inyección SQL',
+            'xss_attempt': 'Intento de XSS'
+        };
+
+        return types[type] || type.replace(/_/g, ' ').toUpperCase();
+    }
+
+    async function resolveThreat(threatId) {
+        if (!confirm('¿Marcar esta amenaza como resuelta?')) return;
+
+        try {
+            const response = await fetch('/api/threats/resolve', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ threat_id: threatId })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification('Amenaza marcada como resuelta', 'success');
+                loadThreats();
+            } else {
+                showNotification('Error al resolver amenaza', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al resolver amenaza', 'error');
+        }
+    }
+
+    // Cargar amenazas al iniciar
+    document.addEventListener('DOMContentLoaded', loadThreats);
+</script>
+{% endblock %}

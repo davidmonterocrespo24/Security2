@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración Inicial - Sistema de Seguridad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-blue-900 to-gray-900 min-h-screen flex items-center justify-center">
+    <div class="container max-w-4xl mx-auto p-6">
+        <div class="bg-white rounded-lg shadow-2xl overflow-hidden">
+            <!-- Header -->
+            <div class="bg-blue-600 text-white p-6">
+                <h1 class="text-3xl font-bold flex items-center">
+                    <i class="fas fa-shield-alt mr-3"></i>
+                    Sistema de Seguridad para Ubuntu
+                </h1>
+                <p class="mt-2 text-blue-100">Configuración inicial del sistema</p>
+            </div>
+
+            <!-- Content -->
+            <div class="p-8">
+                <div id="step1" class="step">
+                    <h2 class="text-2xl font-bold mb-6 text-gray-800">Paso 1: Rutas del Sistema</h2>
+                    <p class="text-gray-600 mb-6">Ingresa las rutas donde están instalados los servicios en tu servidor:</p>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-folder mr-2 text-blue-600"></i>
+                                Ruta de Odoo
+                            </label>
+                            <input type="text" id="odoo_path" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="/opt/odoo" value="/opt/odoo">
+                            <p class="text-xs text-gray-500 mt-1">Directorio de instalación de Odoo</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-database mr-2 text-blue-600"></i>
+                                Ruta de PostgreSQL
+                            </label>
+                            <input type="text" id="postgres_path" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="/var/lib/postgresql" value="/var/lib/postgresql">
+                            <p class="text-xs text-gray-500 mt-1">Directorio de datos de PostgreSQL</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-server mr-2 text-blue-600"></i>
+                                Ruta de Nginx
+                            </label>
+                            <input type="text" id="nginx_path" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="/etc/nginx" value="/etc/nginx">
+                            <p class="text-xs text-gray-500 mt-1">Directorio de configuración de Nginx</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-file-alt mr-2 text-blue-600"></i>
+                                Ruta de logs de Nginx
+                            </label>
+                            <input type="text" id="nginx_log_path" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="/var/log/nginx" value="/var/log/nginx">
+                            <p class="text-xs text-gray-500 mt-1">Directorio de logs de Nginx</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-key mr-2 text-blue-600"></i>
+                                Ruta de logs SSH
+                            </label>
+                            <input type="text" id="ssh_log_path" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="/var/log/auth.log" value="/var/log/auth.log">
+                            <p class="text-xs text-gray-500 mt-1">Archivo de logs de autenticación SSH</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 flex justify-end">
+                        <button onclick="nextStep()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                            Siguiente
+                            <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="step2" class="step hidden">
+                    <h2 class="text-2xl font-bold mb-6 text-gray-800">Paso 2: Instalación de Componentes</h2>
+                    <p class="text-gray-600 mb-6">Selecciona los componentes que deseas instalar:</p>
+
+                    <div class="space-y-4">
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="install_fail2ban" class="w-5 h-5 text-blue-600" checked>
+                            <div class="ml-3">
+                                <div class="font-semibold text-gray-800">
+                                    <i class="fas fa-ban mr-2 text-blue-600"></i>
+                                    Fail2ban
+                                </div>
+                                <div class="text-sm text-gray-600">Protección contra ataques de fuerza bruta</div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="install_ufw" class="w-5 h-5 text-blue-600" checked>
+                            <div class="ml-3">
+                                <div class="font-semibold text-gray-800">
+                                    <i class="fas fa-fire mr-2 text-blue-600"></i>
+                                    UFW (Firewall)
+                                </div>
+                                <div class="text-sm text-gray-600">Firewall para Ubuntu</div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="configure_nginx" class="w-5 h-5 text-blue-600" checked>
+                            <div class="ml-3">
+                                <div class="font-semibold text-gray-800">
+                                    <i class="fas fa-cog mr-2 text-blue-600"></i>
+                                    Configurar protección Nginx
+                                </div>
+                                <div class="text-sm text-gray-600">Filtros Fail2ban para Nginx</div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="configure_ssh" class="w-5 h-5 text-blue-600" checked>
+                            <div class="ml-3">
+                                <div class="font-semibold text-gray-800">
+                                    <i class="fas fa-lock mr-2 text-blue-600"></i>
+                                    Configurar protección SSH
+                                </div>
+                                <div class="text-sm text-gray-600">Filtros Fail2ban para SSH</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="mt-8 flex justify-between">
+                        <button onclick="previousStep()" class="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold">
+                            <i class="fas fa-arrow-left mr-2"></i>
+                            Anterior
+                        </button>
+                        <button onclick="startInstallation()" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold">
+                            <i class="fas fa-play mr-2"></i>
+                            Iniciar Instalación
+                        </button>
+                    </div>
+                </div>
+
+                <div id="step3" class="step hidden">
+                    <h2 class="text-2xl font-bold mb-6 text-gray-800">Paso 3: Instalación en Progreso</h2>
+
+                    <div class="mb-6">
+                        <div class="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4">
+                            <p class="text-blue-800">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                La instalación puede tardar varios minutos. Por favor, no cierre esta ventana.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div id="installation-progress" class="space-y-3">
+                        <!-- Se llenará dinámicamente -->
+                    </div>
+
+                    <div id="installation-complete" class="hidden mt-8">
+                        <div class="bg-green-50 border-l-4 border-green-600 p-4 mb-4">
+                            <p class="text-green-800 font-semibold">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                Instalación completada exitosamente
+                            </p>
+                        </div>
+
+                        <button onclick="goToDashboard()" class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                            <i class="fas fa-home mr-2"></i>
+                            Ir al Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+
+        function nextStep() {
+            document.getElementById('step' + currentStep).classList.add('hidden');
+            currentStep++;
+            document.getElementById('step' + currentStep).classList.remove('hidden');
+        }
+
+        function previousStep() {
+            document.getElementById('step' + currentStep).classList.add('hidden');
+            currentStep--;
+            document.getElementById('step' + currentStep).classList.remove('hidden');
+        }
+
+        async function startInstallation() {
+            nextStep();
+
+            const config = {
+                odoo_path: document.getElementById('odoo_path').value,
+                postgres_path: document.getElementById('postgres_path').value,
+                nginx_path: document.getElementById('nginx_path').value,
+                nginx_log_path: document.getElementById('nginx_log_path').value,
+                ssh_log_path: document.getElementById('ssh_log_path').value,
+                install_fail2ban: document.getElementById('install_fail2ban').checked,
+                install_ufw: document.getElementById('install_ufw').checked,
+                configure_nginx: document.getElementById('configure_nginx').checked,
+                configure_ssh: document.getElementById('configure_ssh').checked,
+            };
+
+            const progressDiv = document.getElementById('installation-progress');
+
+            // Simular instalación (en producción esto llamaría a la API)
+            const steps = [
+                'Guardando configuración...',
+                'Actualizando paquetes del sistema...',
+                'Instalando Fail2ban...',
+                'Instalando UFW...',
+                'Configurando filtros de Nginx...',
+                'Configurando filtros de SSH...',
+                'Finalizando instalación...'
+            ];
+
+            for (let i = 0; i < steps.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'flex items-center p-3 bg-gray-50 rounded-lg';
+                stepDiv.innerHTML = `
+                    <i class="fas fa-check-circle text-green-600 mr-3"></i>
+                    <span>${steps[i]}</span>
+                `;
+                progressDiv.appendChild(stepDiv);
+            }
+
+            // Llamar a la API para instalar
+            try {
+                const response = await fetch('/api/install', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+
+                const result = await response.json();
+
+                document.getElementById('installation-complete').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error durante la instalación. Por favor, verifica los logs.');
+            }
+        }
+
+        function goToDashboard() {
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

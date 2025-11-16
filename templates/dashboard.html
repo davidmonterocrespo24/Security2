@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Sistema de Seguridad{% endblock %}
+{% block header %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Blocked IPs -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">IPs Bloqueadas</p>
+                <p class="text-3xl font-bold text-gray-800" id="blocked-ips">0</p>
+            </div>
+            <div class="bg-red-100 p-3 rounded-full">
+                <i class="fas fa-ban text-red-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Threats -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Amenazas Activas</p>
+                <p class="text-3xl font-bold text-gray-800" id="active-threats">0</p>
+            </div>
+            <div class="bg-yellow-100 p-3 rounded-full">
+                <i class="fas fa-exclamation-triangle text-yellow-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Open Ports -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Puertos Abiertos</p>
+                <p class="text-3xl font-bold text-gray-800" id="open-ports">0</p>
+            </div>
+            <div class="bg-blue-100 p-3 rounded-full">
+                <i class="fas fa-network-wired text-blue-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firewall Rules -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Reglas Firewall</p>
+                <p class="text-3xl font-bold text-gray-800" id="firewall-rules">0</p>
+            </div>
+            <div class="bg-green-100 p-3 rounded-full">
+                <i class="fas fa-fire text-green-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts and Activity -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Security Status -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-chart-line mr-2 text-blue-600"></i>
+            Estado de Seguridad
+        </h3>
+
+        <div class="space-y-4">
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-gray-700">Intentos SSH Fallidos</span>
+                    <span class="text-sm font-bold text-gray-900" id="ssh-failed">0</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="ssh-failed-bar" class="bg-red-500 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-gray-700">Peticiones Sospechosas</span>
+                    <span class="text-sm font-bold text-gray-900" id="suspicious-requests">0</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="suspicious-bar" class="bg-yellow-500 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-gray-700">Bots Detectados</span>
+                    <span class="text-sm font-bold text-gray-900" id="detected-bots">0</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="bots-bar" class="bg-orange-500 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-6">
+            <button onclick="scanThreats()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                <i class="fas fa-search mr-2"></i>
+                Escanear Amenazas
+            </button>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-clock mr-2 text-blue-600"></i>
+            Actividad Reciente
+        </h3>
+
+        <div id="recent-activity" class="space-y-3 max-h-96 overflow-y-auto">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+</div>
+
+<!-- Recent Blocks Table -->
+<div class="bg-white rounded-lg shadow-md p-6">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-list mr-2 text-blue-600"></i>
+        Bloqueos Recientes
+    </h3>
+
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jail</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                </tr>
+            </thead>
+            <tbody id="recent-blocks" class="bg-white divide-y divide-gray-200">
+                <!-- Se llenará dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadDashboardData() {
+        try {
+            // Cargar estadísticas
+            const statsResponse = await fetch('/api/dashboard/stats');
+            const stats = await statsResponse.json();
+
+            document.getElementById('blocked-ips').textContent = stats.blocked_ips || 0;
+            document.getElementById('active-threats').textContent = stats.active_threats || 0;
+            document.getElementById('open-ports').textContent = stats.open_ports || 0;
+            document.getElementById('firewall-rules').textContent = stats.firewall_rules || 0;
+
+            document.getElementById('ssh-failed').textContent = stats.failed_ssh_attempts || 0;
+            document.getElementById('suspicious-requests').textContent = stats.suspicious_requests || 0;
+            document.getElementById('detected-bots').textContent = stats.detected_bots || 0;
+
+            // Actualizar barras de progreso
+            updateProgressBar('ssh-failed-bar', stats.failed_ssh_attempts, 100);
+            updateProgressBar('suspicious-bar', stats.suspicious_requests, 200);
+            updateProgressBar('bots-bar', stats.detected_bots, 50);
+
+            // Cargar actividad reciente
+            const activityResponse = await fetch('/api/dashboard/recent-activity');
+            const activity = await activityResponse.json();
+
+            displayRecentActivity(activity);
+            displayRecentBlocks(activity.recent_blocks);
+
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+        }
+    }
+
+    function updateProgressBar(elementId, value, max) {
+        const percentage = Math.min((value / max) * 100, 100);
+        document.getElementById(elementId).style.width = percentage + '%';
+    }
+
+    function displayRecentActivity(activity) {
+        const container = document.getElementById('recent-activity');
+        container.innerHTML = '';
+
+        const allActivity = [
+            ...(activity.recent_blocks || []).map(b => ({
+                type: 'block',
+                icon: 'fa-ban',
+                color: 'text-red-600',
+                message: `IP ${b.ip} bloqueada en ${b.jail}`,
+                time: b.timestamp
+            })),
+            ...(activity.recent_threats || []).map(t => ({
+                type: 'threat',
+                icon: 'fa-exclamation-triangle',
+                color: 'text-yellow-600',
+                message: `Amenaza detectada: ${t.type}`,
+                time: t.timestamp
+            })),
+            ...(activity.recent_ssh_failures || []).map(f => ({
+                type: 'ssh',
+                icon: 'fa-key',
+                color: 'text-blue-600',
+                message: `Fallo SSH desde ${f.ip}`,
+                time: f.timestamp
+            }))
+        ].slice(0, 10);
+
+        if (allActivity.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">No hay actividad reciente</p>';
+            return;
+        }
+
+        allActivity.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'flex items-start p-3 bg-gray-50 rounded-lg';
+            div.innerHTML = `
+                <i class="fas ${item.icon} ${item.color} mt-1 mr-3"></i>
+                <div class="flex-1">
+                    <p class="text-sm text-gray-800">${item.message}</p>
+                    <p class="text-xs text-gray-500 mt-1">${item.time || 'Hace un momento'}</p>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function displayRecentBlocks(blocks) {
+        const tbody = document.getElementById('recent-blocks');
+        tbody.innerHTML = '';
+
+        if (!blocks || blocks.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-gray-500">No hay bloqueos recientes</td></tr>';
+            return;
+        }
+
+        blocks.forEach(block => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${block.timestamp}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${block.ip}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">${block.jail}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <button onclick="unbanIP('${block.ip}', '${block.jail}')" class="text-green-600 hover:text-green-800">
+                        <i class="fas fa-unlock mr-1"></i>
+                        Desbloquear
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function unbanIP(ip, jail) {
+        if (!confirm(`¿Desbloquear la IP ${ip}?`)) return;
+
+        try {
+            const response = await fetch('/api/fail2ban/unban', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ip, jail })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(`IP ${ip} desbloqueada`, 'success');
+                loadDashboardData();
+            } else {
+                showNotification('Error al desbloquear IP', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al desbloquear IP', 'error');
+        }
+    }
+
+    async function scanThreats() {
+        showNotification('Escaneando amenazas...', 'info');
+
+        try {
+            const response = await fetch('/api/threats/scan', {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            showNotification(`Escaneo completado: ${result.threats_found} amenazas encontradas`, 'success');
+            loadDashboardData();
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al escanear amenazas', 'error');
+        }
+    }
+
+    // Cargar datos al iniciar
+    document.addEventListener('DOMContentLoaded', loadDashboardData);
+
+    // Actualizar cada 30 segundos
+    setInterval(loadDashboardData, 30000);
+</script>
+{% endblock %}

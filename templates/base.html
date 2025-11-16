@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema de Seguridad{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        secondary: '#64748b',
+                        danger: '#dc2626',
+                        success: '#16a34a',
+                        warning: '#ca8a04',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .sidebar-link.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-gray-900 text-white flex flex-col">
+            <div class="p-4 border-b border-gray-700">
+                <h1 class="text-xl font-bold flex items-center">
+                    <i class="fas fa-shield-alt mr-2"></i>
+                    Security System
+                </h1>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto p-4">
+                <a href="/" class="sidebar-link flex items-center p-3 rounded-lg mb-2 hover:bg-gray-800 transition">
+                    <i class="fas fa-home mr-3"></i>
+                    Dashboard
+                </a>
+                <a href="/firewall" class="sidebar-link flex items-center p-3 rounded-lg mb-2 hover:bg-gray-800 transition">
+                    <i class="fas fa-fire mr-3"></i>
+                    Firewall
+                </a>
+                <a href="/fail2ban" class="sidebar-link flex items-center p-3 rounded-lg mb-2 hover:bg-gray-800 transition">
+                    <i class="fas fa-ban mr-3"></i>
+                    Fail2ban
+                </a>
+                <a href="/logs" class="sidebar-link flex items-center p-3 rounded-lg mb-2 hover:bg-gray-800 transition">
+                    <i class="fas fa-file-alt mr-3"></i>
+                    Logs
+                </a>
+                <a href="/threats" class="sidebar-link flex items-center p-3 rounded-lg mb-2 hover:bg-gray-800 transition">
+                    <i class="fas fa-exclamation-triangle mr-3"></i>
+                    Amenazas
+                </a>
+                <a href="/settings" class="sidebar-link flex items-center p-3 rounded-lg mb-2 hover:bg-gray-800 transition">
+                    <i class="fas fa-cog mr-3"></i>
+                    Configuración
+                </a>
+            </nav>
+
+            <div class="p-4 border-t border-gray-700">
+                <div class="text-sm text-gray-400">
+                    <i class="fas fa-server mr-2"></i>
+                    Ubuntu Server
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header -->
+            <header class="bg-white shadow-sm p-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold text-gray-800">
+                        {% block header %}Dashboard{% endblock %}
+                    </h2>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                            <i class="fas fa-sync-alt mr-2"></i>
+                            Actualizar
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <main class="flex-1 overflow-y-auto p-6">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Marcar link activo
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const links = document.querySelectorAll('.sidebar-link');
+
+            links.forEach(link => {
+                if (link.getAttribute('href') === currentPath) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+        // Función para refrescar datos
+        function refreshData() {
+            location.reload();
+        }
+
+        // Utilidad para mostrar notificaciones
+        function showNotification(message, type = 'info') {
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

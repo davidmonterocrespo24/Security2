@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - Sistema de Seguridad{% endblock %}
+{% block header %}Análisis de Logs{% endblock %}
+
+{% block content %}
+<!-- Log Selector -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="flex items-center justify-between">
+        <div class="flex gap-4">
+            <button onclick="selectLogType('ssh')" id="btn-ssh" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold">
+                <i class="fas fa-key mr-2"></i>
+                SSH
+            </button>
+            <button onclick="selectLogType('nginx')" id="btn-nginx" class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold">
+                <i class="fas fa-server mr-2"></i>
+                Nginx
+            </button>
+        </div>
+
+        <button onclick="analyzeLogs()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+            <i class="fas fa-chart-bar mr-2"></i>
+            Analizar Patrones
+        </button>
+    </div>
+</div>
+
+<!-- Analysis Results -->
+<div id="analysis-results" class="hidden mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h4 class="font-bold text-gray-700 mb-2">Total de Eventos</h4>
+            <p class="text-3xl font-bold text-blue-600" id="total-events">0</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h4 class="font-bold text-gray-700 mb-2">Eventos Sospechosos</h4>
+            <p class="text-3xl font-bold text-yellow-600" id="suspicious-events">0</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h4 class="font-bold text-gray-700 mb-2">IPs Únicas</h4>
+            <p class="text-3xl font-bold text-green-600" id="unique-ips">0</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h3 class="text-xl font-bold mb-4">Top IPs Atacantes</h3>
+        <div id="top-ips" class="space-y-2">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+</div>
+
+<!-- Logs Table -->
+<div class="bg-white rounded-lg shadow-md p-6">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-file-alt mr-2 text-blue-600"></i>
+        Logs Recientes
+    </h3>
+
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr id="table-headers">
+                    <!-- Se llenará dinámicamente -->
+                </tr>
+            </thead>
+            <tbody id="logs-table" class="bg-white divide-y divide-gray-200">
+                <!-- Se llenará dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-4 flex justify-center">
+        <button onclick="loadLogs()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+            <i class="fas fa-sync-alt mr-2"></i>
+            Cargar Más
+        </button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentLogType = 'ssh';
+
+    function selectLogType(type) {
+        currentLogType = type;
+
+        // Actualizar botones
+        document.getElementById('btn-ssh').className = type === 'ssh' ?
+            'px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold' :
+            'px-6 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold';
+
+        document.getElementById('btn-nginx').className = type === 'nginx' ?
+            'px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold' :
+            'px-6 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold';
+
+        loadLogs();
+    }
+
+    async function loadLogs() {
+        const endpoint = currentLogType === 'ssh' ? '/api/logs/ssh' : '/api/logs/nginx';
+
+        try {
+            const response = await fetch(endpoint);
+            const data = await response.json();
+
+            displayLogs(data.logs);
+
+        } catch (error) {
+            console.error('Error loading logs:', error);
+        }
+    }
+
+    function displayLogs(logs) {
+        const headers = document.getElementById('table-headers');
+        const tbody = document.getElementById('logs-table');
+
+        tbody.innerHTML = '';
+
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="px-6 py-4 text-center text-gray-500">No hay logs disponibles</td></tr>';
+            return;
+        }
+
+        if (currentLogType === 'ssh') {
+            headers.innerHTML = `
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+            `;
+
+            logs.forEach(log => {
+                if (!log.ip) return;
+
+                const tr = document.createElement('tr');
+                const statusColor = {
+                    'failed': 'bg-red-100 text-red-800',
+                    'success': 'bg-green-100 text-green-800',
+                    'invalid_user': 'bg-yellow-100 text-yellow-800'
+                }[log.status] || 'bg-gray-100 text-gray-800';
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${log.timestamp || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${log.ip || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${log.user || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-1 ${statusColor} rounded-full text-xs font-semibold">${log.status || 'unknown'}</span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+        } else {
+            headers.innerHTML = `
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ruta</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+            `;
+
+            logs.forEach(log => {
+                if (!log.ip) return;
+
+                const tr = document.createElement('tr');
+                const statusColor = log.status >= 400 ? 'text-red-600' : 'text-green-600';
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${log.timestamp || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${log.ip}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${log.method || 'N/A'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">${log.path || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${statusColor}">${log.status || 'N/A'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    }
+
+    async function analyzeLogs() {
+        showNotification('Analizando logs...', 'info');
+
+        try {
+            const response = await fetch('/api/logs/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ type: currentLogType })
+            });
+
+            const analysis = await response.json();
+
+            displayAnalysis(analysis);
+            showNotification('Análisis completado', 'success');
+
+        } catch (error) {
+            console.error('Error analyzing logs:', error);
+            showNotification('Error al analizar logs', 'error');
+        }
+    }
+
+    function displayAnalysis(analysis) {
+        document.getElementById('analysis-results').classList.remove('hidden');
+
+        if (currentLogType === 'ssh' && analysis.ssh) {
+            document.getElementById('total-events').textContent = analysis.ssh.total_attempts || 0;
+            document.getElementById('suspicious-events').textContent = analysis.ssh.failed_attempts || 0;
+            document.getElementById('unique-ips').textContent = analysis.ssh.top_attacking_ips?.length || 0;
+
+            const topIpsDiv = document.getElementById('top-ips');
+            topIpsDiv.innerHTML = '';
+
+            (analysis.ssh.top_attacking_ips || []).forEach(([ip, count]) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+                div.innerHTML = `
+                    <span class="font-mono">${ip}</span>
+                    <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-bold">${count} intentos</span>
+                `;
+                topIpsDiv.appendChild(div);
+            });
+
+        } else if (currentLogType === 'nginx' && analysis.nginx) {
+            document.getElementById('total-events').textContent = analysis.nginx.total_requests || 0;
+            document.getElementById('suspicious-events').textContent = analysis.nginx.suspicious_requests || 0;
+            document.getElementById('unique-ips').textContent = analysis.nginx.unique_ips || 0;
+
+            const topIpsDiv = document.getElementById('top-ips');
+            topIpsDiv.innerHTML = '';
+
+            (analysis.nginx.top_ips || []).forEach(([ip, count]) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+                div.innerHTML = `
+                    <span class="font-mono">${ip}</span>
+                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-bold">${count} peticiones</span>
+                `;
+                topIpsDiv.appendChild(div);
+            });
+        }
+    }
+
+    // Cargar logs al iniciar
+    document.addEventListener('DOMContentLoaded', loadLogs);
+</script>
+{% endblock %}

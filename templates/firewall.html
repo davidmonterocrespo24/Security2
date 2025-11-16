@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}Firewall - Sistema de Seguridad{% endblock %}
+{% block header %}Gestión de Firewall (UFW){% endblock %}
+
+{% block content %}
+<!-- Firewall Status -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h3 class="text-xl font-bold mb-2">Estado del Firewall</h3>
+            <p class="text-gray-600" id="firewall-status-text">Verificando...</p>
+        </div>
+        <div>
+            <button onclick="toggleFirewall()" id="toggle-firewall-btn" class="px-6 py-3 rounded-lg font-semibold transition">
+                <i class="fas fa-power-off mr-2"></i>
+                <span id="toggle-text">Activar</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Rule Form -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-plus-circle mr-2 text-blue-600"></i>
+        Agregar Nueva Regla
+    </h3>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Acción</label>
+            <select id="rule-action" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <option value="allow">Permitir (ALLOW)</option>
+                <option value="deny">Denegar (DENY)</option>
+                <option value="reject">Rechazar (REJECT)</option>
+                <option value="limit">Limitar (LIMIT)</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Puerto</label>
+            <input type="text" id="rule-port" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="80">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Protocolo</label>
+            <select id="rule-protocol" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                <option value="tcp">TCP</option>
+                <option value="udp">UDP</option>
+                <option value="any">Cualquiera</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">IP Origen (opcional)</label>
+            <input type="text" id="rule-from-ip" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="any">
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <button onclick="addFirewallRule()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+            <i class="fas fa-plus mr-2"></i>
+            Agregar Regla
+        </button>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-bolt mr-2 text-blue-600"></i>
+        Acciones Rápidas
+    </h3>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <button onclick="allowService('ssh')" class="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition">
+            <i class="fas fa-key text-blue-600 text-2xl mb-2"></i>
+            <p class="font-semibold">Permitir SSH</p>
+        </button>
+
+        <button onclick="allowService('http')" class="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition">
+            <i class="fas fa-globe text-blue-600 text-2xl mb-2"></i>
+            <p class="font-semibold">Permitir HTTP</p>
+        </button>
+
+        <button onclick="allowService('https')" class="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition">
+            <i class="fas fa-lock text-blue-600 text-2xl mb-2"></i>
+            <p class="font-semibold">Permitir HTTPS</p>
+        </button>
+
+        <button onclick="allowService('5432/tcp')" class="p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition">
+            <i class="fas fa-database text-blue-600 text-2xl mb-2"></i>
+            <p class="font-semibold">Permitir PostgreSQL</p>
+        </button>
+    </div>
+</div>
+
+<!-- Firewall Rules Table -->
+<div class="bg-white rounded-lg shadow-md p-6">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-list mr-2 text-blue-600"></i>
+        Reglas Activas
+    </h3>
+
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Regla</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dirección</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Desde</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="firewall-rules" class="bg-white divide-y divide-gray-200">
+                <!-- Se llenará dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let firewallEnabled = false;
+
+    async function loadFirewallStatus() {
+        try {
+            const response = await fetch('/api/firewall/status');
+            const status = await response.json();
+
+            firewallEnabled = status.enabled;
+
+            if (status.available) {
+                document.getElementById('firewall-status-text').textContent =
+                    status.enabled ? 'Firewall activo y protegiendo el sistema' : 'Firewall desactivado';
+
+                const btn = document.getElementById('toggle-firewall-btn');
+                if (status.enabled) {
+                    btn.className = 'px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition';
+                    document.getElementById('toggle-text').textContent = 'Desactivar';
+                } else {
+                    btn.className = 'px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition';
+                    document.getElementById('toggle-text').textContent = 'Activar';
+                }
+            } else {
+                document.getElementById('firewall-status-text').textContent = 'UFW no está instalado';
+            }
+
+        } catch (error) {
+            console.error('Error loading firewall status:', error);
+        }
+    }
+
+    async function loadFirewallRules() {
+        try {
+            const response = await fetch('/api/firewall/rules');
+            const data = await response.json();
+
+            const tbody = document.getElementById('firewall-rules');
+            tbody.innerHTML = '';
+
+            if (!data.rules || data.rules.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No hay reglas configuradas</td></tr>';
+                return;
+            }
+
+            data.rules.forEach(rule => {
+                const tr = document.createElement('tr');
+
+                const actionColor = {
+                    'ALLOW': 'bg-green-100 text-green-800',
+                    'DENY': 'bg-red-100 text-red-800',
+                    'REJECT': 'bg-red-100 text-red-800',
+                    'LIMIT': 'bg-yellow-100 text-yellow-800'
+                }[rule.action] || 'bg-gray-100 text-gray-800';
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${rule.number}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${rule.rule}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-1 ${actionColor} rounded-full text-xs font-semibold">${rule.action}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${rule.direction}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${rule.from}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <button onclick="deleteRule(${rule.number})" class="text-red-600 hover:text-red-800">
+                            <i class="fas fa-trash mr-1"></i>
+                            Eliminar
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+        } catch (error) {
+            console.error('Error loading firewall rules:', error);
+        }
+    }
+
+    async function toggleFirewall() {
+        const enable = !firewallEnabled;
+        const action = enable ? 'activar' : 'desactivar';
+
+        if (!confirm(`¿Seguro que deseas ${action} el firewall?`)) return;
+
+        try {
+            const response = await fetch('/api/firewall/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enable })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(`Firewall ${enable ? 'activado' : 'desactivado'}`, 'success');
+                loadFirewallStatus();
+            } else {
+                showNotification('Error al cambiar estado del firewall', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al cambiar estado del firewall', 'error');
+        }
+    }
+
+    async function addFirewallRule() {
+        const rule = {
+            action: document.getElementById('rule-action').value,
+            port: document.getElementById('rule-port').value,
+            protocol: document.getElementById('rule-protocol').value,
+            from_ip: document.getElementById('rule-from-ip').value || 'any'
+        };
+
+        if (!rule.port) {
+            showNotification('Por favor ingresa un puerto', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/firewall/rule', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(rule)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification('Regla agregada exitosamente', 'success');
+                loadFirewallRules();
+
+                // Limpiar formulario
+                document.getElementById('rule-port').value = '';
+                document.getElementById('rule-from-ip').value = '';
+            } else {
+                showNotification('Error al agregar regla', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al agregar regla', 'error');
+        }
+    }
+
+    async function deleteRule(ruleNumber) {
+        if (!confirm('¿Seguro que deseas eliminar esta regla?')) return;
+
+        try {
+            const response = await fetch(`/api/firewall/rule/${ruleNumber}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification('Regla eliminada', 'success');
+                loadFirewallRules();
+            } else {
+                showNotification('Error al eliminar regla', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al eliminar regla', 'error');
+        }
+    }
+
+    async function allowService(service) {
+        try {
+            const response = await fetch('/api/firewall/rule', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'allow',
+                    port: service,
+                    protocol: 'tcp',
+                    from_ip: 'any'
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(`Servicio ${service} permitido`, 'success');
+                loadFirewallRules();
+            } else {
+                showNotification('Error al permitir servicio', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al permitir servicio', 'error');
+        }
+    }
+
+    // Cargar datos al iniciar
+    document.addEventListener('DOMContentLoaded', () => {
+        loadFirewallStatus();
+        loadFirewallRules();
+    });
+</script>
+{% endblock %}
