@@ -89,23 +89,47 @@ class MLTrafficDetector:
 
     def prepare_training_data(self, days_back=30):
         """Preparar datos de entrenamiento desde la base de datos"""
+        print(f"\n{'='*60}")
+        print("PREPARACIÓN DE DATOS DE ENTRENAMIENTO")
+        print(f"{'='*60}")
         print(f"Obteniendo eventos de los últimos {days_back} días...")
 
         # Obtener eventos de seguridad
         events = self.db.get_security_events(limit=10000)
 
         if not events or len(events) == 0:
-            print("No hay eventos suficientes para entrenar el modelo")
+            print("❌ No hay eventos suficientes para entrenar el modelo")
             return None, None
 
-        print(f"Eventos obtenidos: {len(events)}")
+        print(f"✅ Eventos obtenidos: {len(events)}")
+
+        # Mostrar estadísticas de eventos por tipo
+        from collections import Counter
+        event_types = Counter([e.get('event_type', 'unknown') for e in events])
+        print(f"\n📊 Distribución por tipo de evento:")
+        for event_type, count in event_types.most_common(10):
+            print(f"  - {event_type}: {count} ({count/len(events)*100:.1f}%)")
+
+        # Mostrar estadísticas de severidad
+        severity_counts = Counter([e.get('severity', 'low') for e in events])
+        print(f"\n🔥 Distribución por severidad:")
+        for sev in ['critical', 'high', 'medium', 'low']:
+            count = severity_counts.get(sev, 0)
+            if count > 0:
+                print(f"  - {sev.upper()}: {count} ({count/len(events)*100:.1f}%)")
 
         # Extraer características
+        print(f"\n🔧 Extrayendo características...")
         df = self.extract_features(events)
+        print(f"✅ {len(df.columns)} características extraídas")
 
         # Crear etiqueta (label) basada en si la IP fue bloqueada
         # 1 = malicioso, 0 = normal
         labels = []
+        malicious_by_block = 0
+        malicious_by_severity = 0
+
+        print(f"\n🏷️  Etiquetando eventos...")
         for event in events:
             ip = event.get('source_ip')
             severity = event.get('severity', 'low')
@@ -116,14 +140,29 @@ class MLTrafficDetector:
             is_blocked = self.db.is_ip_blocked(ip) if ip else False
             is_high_severity = severity in ['critical', 'high']
 
+            if is_blocked:
+                malicious_by_block += 1
+            if is_high_severity:
+                malicious_by_severity += 1
+
             label = 1 if (is_blocked or is_high_severity) else 0
             labels.append(label)
 
         df['label'] = labels
 
-        print(f"Distribución de labels:")
-        print(f"  - Malicioso: {sum(labels)} ({sum(labels)/len(labels)*100:.1f}%)")
-        print(f"  - Normal: {len(labels) - sum(labels)} ({(len(labels)-sum(labels))/len(labels)*100:.1f}%)")
+        print(f"\n📈 Distribución de labels (etiquetas):")
+        malicious_count = sum(labels)
+        normal_count = len(labels) - malicious_count
+        print(f"  - Malicioso (1): {malicious_count} ({malicious_count/len(labels)*100:.1f}%)")
+        print(f"    • Por IP bloqueada: {malicious_by_block}")
+        print(f"    • Por severidad alta/crítica: {malicious_by_severity}")
+        print(f"  - Normal (0): {normal_count} ({normal_count/len(labels)*100:.1f}%)")
+
+        # Verificar balance
+        if malicious_count < normal_count * 0.05:  # Menos del 5% son maliciosos
+            print(f"\n⚠️  ADVERTENCIA: Datos muy desbalanceados!")
+            print(f"   Solo {malicious_count/len(labels)*100:.1f}% son maliciosos")
+            print(f"   Recomendado: al menos 10% maliciosos para buen entrenamiento")
 
         return df, labels
 
