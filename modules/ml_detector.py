@@ -446,8 +446,18 @@ class MLTrafficDetector:
         # Obtener eventos recientes
         events = self.db.get_security_events(limit=5000)
 
-        # Filtrar por tiempo
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+        # Filtrar por tiempo (manejar valores grandes usando days en vez de hours)
+        try:
+            if hours_back > 24 * 365:  # Más de 1 año
+                # Usar days para evitar overflow
+                days_back = hours_back / 24
+                cutoff_time = datetime.utcnow() - timedelta(days=days_back)
+            else:
+                cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+        except OverflowError:
+            # Si aún hay overflow, usar el valor máximo razonable (1 año)
+            print(f"   ⚠️  Valor muy grande ({hours_back} horas), usando 365 días como máximo")
+            cutoff_time = datetime.utcnow() - timedelta(days=365)
         filtered_events = []
         for event in events:
             timestamp = event.get('timestamp')
