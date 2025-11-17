@@ -15,9 +15,10 @@ import os
 
 
 class MLTrafficDetector:
-    def __init__(self, db_manager, model_path='models/'):
+    def __init__(self, db_manager, model_path='models/', geo_service=None):
         self.db = db_manager
         self.model_path = model_path
+        self.geo_service = geo_service
         self.model = None
         self.scaler = None
         self.anomaly_detector = None

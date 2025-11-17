@@ -179,6 +179,12 @@ async function loadSuggestions() {
         const response = await fetch(`/api/ml/suggestions?min_confidence=${minConfidence}&hours_back=${hoursBack}`);
         const data = await response.json();
 
+        console.log('ML Suggestions Data:', data);
+        console.log('Suggestions count:', data.suggestions ? data.suggestions.length : 0);
+        if (data.suggestions && data.suggestions.length > 0) {
+            console.log('First suggestion:', data.suggestions[0]);
+        }
+
         if (!data.model_trained) {
             document.getElementById('model-warning').classList.remove('hidden');
             document.getElementById('suggestions-table').innerHTML = `
