@@ -823,3 +823,119 @@ class DatabaseManager:
             }
         finally:
             session.close()
+
+    # ==================== CONFIGURACIÓN GEOGRÁFICA ====================
+
+    def get_geo_config(self):
+        """Obtener configuración de filtrado geográfico"""
+        session = self.get_session()
+        try:
+            config = session.query(GeoConfig).first()
+            if config:
+                return config.to_dict()
+
+            # Si no existe, crear configuración por defecto
+            default_config = GeoConfig(
+                enabled=False,
+                mode='whitelist',
+                countries='[]',
+                block_unknown=False,
+                updated_by='system'
+            )
+            session.add(default_config)
+            session.commit()
+            return default_config.to_dict()
+        finally:
+            session.close()
+
+    def update_geo_config(self, enabled=None, mode=None, countries=None, block_unknown=None, updated_by='system'):
+        """Actualizar configuración de filtrado geográfico"""
+        session = self.get_session()
+        try:
+            config = session.query(GeoConfig).first()
+
+            if not config:
+                # Crear nueva configuración
+                config = GeoConfig()
+                session.add(config)
+
+            # Actualizar campos proporcionados
+            if enabled is not None:
+                config.enabled = enabled
+            if mode is not None:
+                config.mode = mode
+            if countries is not None:
+                # Convertir lista a JSON
+                if isinstance(countries, list):
+                    config.countries = json.dumps(countries)
+                else:
+                    config.countries = countries
+            if block_unknown is not None:
+                config.block_unknown = block_unknown
+
+            config.updated_at = datetime.utcnow()
+            config.updated_by = updated_by
+
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error updating geo config: {e}")
+            return False
+        finally:
+            session.close()
+
+    def add_country_to_filter(self, country_code, updated_by='system'):
+        """Agregar un país a la lista de filtrado"""
+        session = self.get_session()
+        try:
+            config = session.query(GeoConfig).first()
+
+            if not config:
+                # Crear configuración si no existe
+                config = GeoConfig(
+                    countries=json.dumps([country_code]),
+                    updated_by=updated_by
+                )
+                session.add(config)
+            else:
+                # Agregar a lista existente
+                countries = json.loads(config.countries) if config.countries else []
+                if country_code not in countries:
+                    countries.append(country_code)
+                    config.countries = json.dumps(countries)
+                    config.updated_at = datetime.utcnow()
+                    config.updated_by = updated_by
+
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error adding country to filter: {e}")
+            return False
+        finally:
+            session.close()
+
+    def remove_country_from_filter(self, country_code, updated_by='system'):
+        """Remover un país de la lista de filtrado"""
+        session = self.get_session()
+        try:
+            config = session.query(GeoConfig).first()
+
+            if config and config.countries:
+                countries = json.loads(config.countries)
+                if country_code in countries:
+                    countries.remove(country_code)
+                    config.countries = json.dumps(countries)
+                    config.updated_at = datetime.utcnow()
+                    config.updated_by = updated_by
+                    session.commit()
+                    return True
+
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"Error removing country from filter: {e}")
+            return False
+        finally:
+            session.close()

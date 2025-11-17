@@ -371,6 +371,37 @@ class MonitoredPort(Base):
     is_active = Column(Boolean, default=True, index=True)
 
 
+class GeoConfig(Base):
+    """Configuración de filtrado geográfico"""
+    __tablename__ = 'geo_config'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    enabled = Column(Boolean, default=False, index=True)
+    mode = Column(String, default='whitelist')  # 'whitelist' o 'blacklist'
+    countries = Column(Text)  # JSON: lista de códigos ISO de países
+    block_unknown = Column(Boolean, default=False)  # Bloquear IPs sin país identificado
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_by = Column(String)
+
+    def to_dict(self):
+        countries_list = []
+        if self.countries:
+            try:
+                countries_list = json.loads(self.countries)
+            except:
+                countries_list = []
+
+        return {
+            'id': self.id,
+            'enabled': self.enabled,
+            'mode': self.mode,
+            'countries': countries_list,
+            'block_unknown': self.block_unknown,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'updated_by': self.updated_by
+        }
+
+
 # Función para inicializar la base de datos
 def init_database():
     """Crear todas las tablas si no existen"""

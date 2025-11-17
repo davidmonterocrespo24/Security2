@@ -16,3 +16,7 @@ scikit-learn==1.3.2
 pandas==2.1.3
 numpy==1.26.2
 joblib==1.3.2
+
+# Geolocalización
+geoip2==4.7.0
+maxminddb==2.6.2

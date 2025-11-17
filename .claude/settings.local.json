@@ -6,7 +6,8 @@
       "Bash(pip install:*)",
       "Bash(python:*)",
       "Bash(timeout 5 python -c \"import sys; sys.path.insert(0, ''.''); from modules.ml_detector import MLTrafficDetector; print(''ML module imported successfully'')\")",
-      "Bash(sudo ufw status:*)"
+      "Bash(sudo ufw status:*)",
+      "Bash(.venv/Scripts/pip install:*)"
     ],
     "deny": [],
     "ask": []
