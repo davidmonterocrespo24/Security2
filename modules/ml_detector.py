@@ -536,7 +536,7 @@ class MLTrafficDetector:
             size_mb = info['size'] / (1024 * 1024)
             print(f"   - {log_type}: {info['path']} ({size_mb:.2f} MB)")
 
-        # Importar logs por lotes (límite de 10000 líneas por archivo para rapidez)
+        # Importar logs por lotes (límite de 50000 líneas por archivo)
         total_imported = 0
 
         for log_type, info in available_logs.items():
@@ -545,9 +545,11 @@ class MLTrafficDetector:
 
             try:
                 if 'nginx_access' in log_type:
-                    result = log_analyzer.import_nginx_access_logs(log_path, limit=10000)
+                    result = log_analyzer.import_nginx_access_logs(log_path, limit=50000)
                 elif 'ssh' in log_type:
-                    result = log_analyzer.import_ssh_auth_logs(log_path, limit=10000)
+                    result = log_analyzer.import_ssh_auth_logs(log_path, limit=50000)
+                elif 'fail2ban' in log_type:
+                    result = log_analyzer.import_fail2ban_logs(log_path, limit=50000)
                 else:
                     continue
 
@@ -559,9 +561,9 @@ class MLTrafficDetector:
                     # Mostrar IPs sospechosas detectadas
                     if result.get('suspicious_ips'):
                         print(f"   🔍 {len(result['suspicious_ips'])} IPs sospechosas detectadas")
+
                     if result.get('brute_force_ips'):
                         print(f"   ⚠️  {len(result['brute_force_ips'])} IPs con brute force detectadas")
-
                         # Auto-bloquear IPs con brute force crítico
                         for bf_ip in result['brute_force_ips'][:5]:  # Top 5
                             if bf_ip['failed_attempts'] >= 10:
@@ -573,6 +575,22 @@ class MLTrafficDetector:
                                         duration_hours=48
                                     )
                                     print(f"   🚫 IP {bf_ip['ip']} bloqueada automáticamente ({bf_ip['failed_attempts']} intentos)")
+                                except:
+                                    pass
+
+                    if result.get('repeat_offenders'):
+                        print(f"   🔁 {len(result['repeat_offenders'])} IPs reincidentes detectadas (Fail2ban)")
+                        # Auto-bloquear IPs reincidentes de Fail2ban
+                        for offender in result['repeat_offenders'][:5]:
+                            if offender['bans'] >= 3:
+                                try:
+                                    self.db.block_ip(
+                                        ip_address=offender['ip'],
+                                        reason=f"Auto-bloqueado: {offender['bans']} bans por Fail2ban en jails: {', '.join(offender['jails'][:3])}",
+                                        blocked_by='ml_auto',
+                                        duration_hours=72
+                                    )
+                                    print(f"   🚫 IP {offender['ip']} bloqueada automáticamente ({offender['bans']} bans)")
                                 except:
                                     pass
                 else:

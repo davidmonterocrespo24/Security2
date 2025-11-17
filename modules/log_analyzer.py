@@ -650,37 +650,164 @@ class LogAnalyzer:
         return results
 
     def get_available_log_files(self):
-        """Detectar archivos de logs disponibles en el sistema"""
+        """Detectar archivos de logs disponibles en el sistema (incluyendo rotados)"""
         log_paths = {
             'nginx_access': [
                 '/var/log/nginx/access.log',
-                '/var/log/nginx/access.log.1',
                 '/usr/local/nginx/logs/access.log',
                 'C:\\nginx\\logs\\access.log'
             ],
             'nginx_error': [
                 '/var/log/nginx/error.log',
-                '/var/log/nginx/error.log.1',
                 '/usr/local/nginx/logs/error.log',
                 'C:\\nginx\\logs\\error.log'
             ],
             'ssh_auth': [
                 '/var/log/auth.log',
-                '/var/log/auth.log.1',
-                '/var/log/secure',
-                '/var/log/secure.1'
+                '/var/log/secure'
+            ],
+            'fail2ban': [
+                '/var/log/fail2ban.log'
+            ],
+            'ufw': [
+                '/var/log/ufw.log',
+                '/var/log/syslog'  # UFW logs pueden estar aquí también
             ]
         }
 
         available = {}
-        for log_type, paths in log_paths.items():
-            for path in paths:
-                if os.path.exists(path):
-                    available[log_type] = {
-                        'path': path,
-                        'size': os.path.getsize(path),
-                        'modified': datetime.fromtimestamp(os.path.getmtime(path)).isoformat()
-                    }
-                    break
+
+        # Detectar archivo principal y rotados (.log.1, .log.2, etc.)
+        for log_type, base_paths in log_paths.items():
+            files_found = []
+
+            for base_path in base_paths:
+                # Archivo principal
+                if os.path.exists(base_path):
+                    files_found.append({
+                        'path': base_path,
+                        'size': os.path.getsize(base_path),
+                        'modified': datetime.fromtimestamp(os.path.getmtime(base_path)).isoformat()
+                    })
+
+                # Buscar archivos rotados (.log.1 hasta .log.5)
+                for i in range(1, 6):
+                    rotated_path = f"{base_path}.{i}"
+                    if os.path.exists(rotated_path):
+                        files_found.append({
+                            'path': rotated_path,
+                            'size': os.path.getsize(rotated_path),
+                            'modified': datetime.fromtimestamp(os.path.getmtime(rotated_path)).isoformat()
+                        })
+
+            # Si encontramos archivos, agregar todos (principal + rotados)
+            if files_found:
+                # Agregar archivo principal
+                available[log_type] = files_found[0]
+
+                # También agregar logs rotados
+                for idx, rotated_file in enumerate(files_found[1:], 1):
+                    available[f"{log_type}_rotated_{idx}"] = rotated_file
 
         return available
+
+    def import_fail2ban_logs(self, log_file_path='/var/log/fail2ban.log', limit=None):
+        """Importar logs de Fail2ban y crear eventos de seguridad"""
+        if not self.db:
+            return {'success': False, 'error': 'Database manager not initialized'}
+
+        if not os.path.exists(log_file_path):
+            return {'success': False, 'error': f'File not found: {log_file_path}'}
+
+        events_created = 0
+        events_skipped = 0
+        errors = []
+        from collections import defaultdict
+        ban_stats = defaultdict(lambda: {'bans': 0, 'unbans': 0, 'jails': set()})
+
+        try:
+            with open(log_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                line_num = 0
+                for line in f:
+                    line_num += 1
+                    if limit and line_num > limit:
+                        break
+
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    # Detectar Ban de IP
+                    # Formato: 2024-01-01 10:00:00,123 fail2ban.actions [12345]: NOTICE [sshd] Ban 192.168.1.100
+                    match_ban = re.search(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*?\[([\w-]+)\] Ban ([\d.]+)', line)
+                    if match_ban:
+                        timestamp_str = match_ban.group(1)
+                        jail = match_ban.group(2)
+                        ip_address = match_ban.group(3)
+
+                        try:
+                            timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                        except:
+                            timestamp = datetime.utcnow()
+
+                        ban_stats[ip_address]['bans'] += 1
+                        ban_stats[ip_address]['jails'].add(jail)
+
+                        # Determinar severidad basada en el jail
+                        severity = 'high' if 'sshd' in jail or 'recidive' in jail else 'medium'
+
+                        try:
+                            self.db.log_security_event(
+                                event_type='fail2ban_ban',
+                                severity=severity,
+                                source_ip=ip_address,
+                                protocol='fail2ban',
+                                attack_vector=jail,
+                                details=f"IP banned by Fail2ban jail: {jail}",
+                                timestamp=timestamp
+                            )
+                            events_created += 1
+                        except Exception as e:
+                            errors.append(f"Line {line_num}: {str(e)[:100]}")
+                        continue
+
+                    # Detectar Unban de IP
+                    match_unban = re.search(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*?\[([\w-]+)\] Unban ([\d.]+)', line)
+                    if match_unban:
+                        timestamp_str = match_unban.group(1)
+                        jail = match_unban.group(2)
+                        ip_address = match_unban.group(3)
+
+                        ban_stats[ip_address]['unbans'] += 1
+
+                        # No crear evento para unban (información redundante)
+                        events_skipped += 1
+                        continue
+
+                    # Detectar intentos encontrados
+                    match_found = re.search(r'\[([\w-]+)\] Found ([\d.]+)', line)
+                    if match_found:
+                        jail = match_found.group(1)
+                        ip_address = match_found.group(2)
+                        # Solo contamos, no creamos evento por cada "Found"
+                        events_skipped += 1
+                        continue
+
+        except Exception as e:
+            return {'success': False, 'error': f'Error reading file: {str(e)}'}
+
+        # IPs con múltiples bans (reincidentes)
+        repeat_offenders = [
+            {'ip': ip, 'bans': stats['bans'], 'jails': list(stats['jails'])}
+            for ip, stats in ban_stats.items()
+            if stats['bans'] > 1
+        ]
+
+        return {
+            'success': True,
+            'events_created': events_created,
+            'events_skipped': events_skipped,
+            'errors': errors[:10],
+            'repeat_offenders': repeat_offenders[:20],
+            'total_lines': line_num
+        }
