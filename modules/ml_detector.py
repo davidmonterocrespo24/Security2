@@ -175,9 +175,29 @@ class MLTrafficDetector:
         # Preparar datos
         df, labels = self.prepare_training_data()
 
-        # Si no hay suficientes eventos, importar logs históricos automáticamente
+        # Verificar si necesitamos importar más datos
+        should_import = False
+        import_reason = ""
+
+        # Caso 1: No hay suficientes eventos totales
         if df is None or len(df) < 50:
-            print("\n⚠️  No hay suficientes eventos para entrenar.")
+            should_import = True
+            import_reason = f"pocos eventos totales ({len(df) if df is not None else 0} < 50)"
+        # Caso 2: Datos muy desbalanceados (menos del 5% maliciosos)
+        elif labels is not None:
+            malicious_count = sum(labels)
+            malicious_ratio = malicious_count / len(labels) if len(labels) > 0 else 0
+
+            if malicious_ratio < 0.05:  # Menos del 5%
+                should_import = True
+                import_reason = f"datos muy desbalanceados ({malicious_ratio*100:.1f}% maliciosos < 5%)"
+            elif malicious_count < 10:  # Menos de 10 eventos maliciosos
+                should_import = True
+                import_reason = f"muy pocos eventos maliciosos ({malicious_count} < 10)"
+
+        # Importar logs históricos si es necesario
+        if should_import:
+            print(f"\n⚠️  Importación automática activada: {import_reason}")
             print("📥 Importando logs históricos automáticamente...\n")
 
             imported_count = self._auto_import_historical_logs()
@@ -189,6 +209,7 @@ class MLTrafficDetector:
                 # Reintentar preparar datos
                 df, labels = self.prepare_training_data()
 
+            # Verificar si ahora tenemos suficientes datos
             if df is None or len(df) < 50:
                 return {
                     'success': False,
