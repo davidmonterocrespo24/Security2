@@ -174,7 +174,29 @@ class MLTrafficDetector:
 
         self.feature_names = X.columns.tolist()
 
-        # Dividir en train/test
+        # Verificar si hay suficiente diversidad en las clases
+        unique_labels = y.unique()
+        if len(unique_labels) < 2:
+            print(f"\n⚠️  ADVERTENCIA: Solo hay una clase en los datos ({unique_labels[0]})")
+            print("El modelo necesita ejemplos de ambas clases (Normal Y Malicioso)")
+            print("Importando más logs históricos para obtener eventos maliciosos...\n")
+
+            # Intentar importar más logs
+            imported_count = self._auto_import_historical_logs()
+            if imported_count > 0:
+                # Reintentar preparar datos
+                df, labels = self.prepare_training_data()
+                X = df.drop('label', axis=1)
+                y = df['label']
+                unique_labels = y.unique()
+
+            if len(unique_labels) < 2:
+                return {
+                    'success': False,
+                    'error': f'No hay suficiente diversidad en los datos. Solo se encontró la clase: {unique_labels[0]}. Se necesitan eventos tanto normales como maliciosos para entrenar el modelo.'
+                }
+
+        # Dividir en train/test con estratificación
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=random_state, stratify=y
         )
@@ -283,9 +305,26 @@ class MLTrafficDetector:
         # Normalizar
         X_scaled = self.scaler.transform(df)
 
+        # Verificar que el modelo tenga ambas clases
+        if not hasattr(self.model, 'classes_') or len(self.model.classes_) < 2:
+            return {
+                'is_suspicious': False,
+                'confidence': 0.0,
+                'reason': 'Modelo entrenado con datos insuficientes (solo una clase)',
+                'is_anomaly': False
+            }
+
         # Predicción de clasificación
-        prediction = self.model.predict(X_scaled)[0]
-        probability = self.model.predict_proba(X_scaled)[0]
+        try:
+            prediction = self.model.predict(X_scaled)[0]
+            probability = self.model.predict_proba(X_scaled)[0]
+        except Exception as e:
+            return {
+                'is_suspicious': False,
+                'confidence': 0.0,
+                'reason': f'Error en predicción: {str(e)}',
+                'is_anomaly': False
+            }
 
         # Predicción de anomalía
         anomaly_score = self.anomaly_detector.score_samples(X_scaled)[0]
