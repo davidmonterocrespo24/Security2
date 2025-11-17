@@ -96,7 +96,7 @@ def extract_ip_behavioral_features(ip_address, events_list):
             continue
 
     temporal_entropy = np.std(time_intervals) if time_intervals else 0
-    is_rhythmic_bot = temporal_entropy < 2 and len(time_intervals) > 3  # Muy regular = bot
+    is_rhythmic_bot = bool(temporal_entropy < 2 and len(time_intervals) > 3)  # Muy regular = bot
 
     # 6. Escalamiento (está incrementando?)
     if len(events_list) >= 10:
@@ -108,7 +108,7 @@ def extract_ip_behavioral_features(ip_address, events_list):
 
     # 7. Longitud promedio de paths
     path_lengths = [len(e.get('request_path', '/')) for e in events_list]
-    avg_path_length = np.mean(path_lengths) if path_lengths else 0
+    avg_path_length = float(np.mean(path_lengths)) if path_lengths else 0
 
     # 8. Total de caracteres sospechosos
     suspicious_chars_total = 0
@@ -117,16 +117,16 @@ def extract_ip_behavioral_features(ip_address, events_list):
         suspicious_chars_total += sum(1 for c in path if c in ['<', '>', '"', "'", ';', '|', '&', '$', '`'])
 
     return {
-        'requests_per_minute': round(requests_per_minute, 2),
-        'path_diversity_ratio': round(path_diversity_ratio, 3),
-        'error_ratio': round(error_ratio, 3),
-        'num_attack_types': num_attack_types,
-        'temporal_entropy': round(temporal_entropy, 2),
+        'requests_per_minute': float(round(requests_per_minute, 2)),
+        'path_diversity_ratio': float(round(path_diversity_ratio, 3)),
+        'error_ratio': float(round(error_ratio, 3)),
+        'num_attack_types': int(num_attack_types),
+        'temporal_entropy': float(round(temporal_entropy, 2)),
         'is_rhythmic_bot': is_rhythmic_bot,
-        'escalation_ratio': round(escalation_ratio, 2),
-        'unique_paths': unique_paths,
-        'avg_path_length': round(avg_path_length, 1),
-        'suspicious_chars_total': suspicious_chars_total
+        'escalation_ratio': float(round(escalation_ratio, 2)),
+        'unique_paths': int(unique_paths),
+        'avg_path_length': float(round(avg_path_length, 1)),
+        'suspicious_chars_total': int(suspicious_chars_total)
     }
 
 
