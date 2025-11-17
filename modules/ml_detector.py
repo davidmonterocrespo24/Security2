@@ -136,11 +136,25 @@ class MLTrafficDetector:
         # Preparar datos
         df, labels = self.prepare_training_data()
 
+        # Si no hay suficientes eventos, importar logs históricos automáticamente
         if df is None or len(df) < 50:
-            return {
-                'success': False,
-                'error': 'No hay suficientes datos para entrenar (mínimo 50 eventos)'
-            }
+            print("\n⚠️  No hay suficientes eventos para entrenar.")
+            print("📥 Importando logs históricos automáticamente...\n")
+
+            imported_count = self._auto_import_historical_logs()
+
+            if imported_count > 0:
+                print(f"\n✅ Se importaron {imported_count} eventos desde logs históricos")
+                print("🔄 Reintentando preparación de datos...\n")
+
+                # Reintentar preparar datos
+                df, labels = self.prepare_training_data()
+
+            if df is None or len(df) < 50:
+                return {
+                    'success': False,
+                    'error': f'No hay suficientes datos para entrenar (mínimo 50 eventos). Actualmente: {len(df) if df is not None else 0} eventos'
+                }
 
         # Separar características categóricas y numéricas
         categorical_features = ['attack_vector', 'event_type', 'source_ip', 'request_method', 'country']
@@ -463,3 +477,70 @@ class MLTrafficDetector:
             'feature_importance': feature_importance.head(10).to_dict('records'),
             'has_anomaly_detector': self.anomaly_detector is not None
         }
+
+    def _auto_import_historical_logs(self):
+        """Importar logs históricos automáticamente para entrenamiento"""
+        from modules.log_analyzer import LogAnalyzer
+
+        # Crear analizador de logs
+        log_analyzer = LogAnalyzer(self.db)
+
+        # Detectar logs disponibles
+        available_logs = log_analyzer.get_available_log_files()
+
+        if not available_logs:
+            print("❌ No se encontraron archivos de logs en el sistema")
+            return 0
+
+        print(f"📁 Encontrados {len(available_logs)} archivos de logs:")
+        for log_type, info in available_logs.items():
+            size_mb = info['size'] / (1024 * 1024)
+            print(f"   - {log_type}: {info['path']} ({size_mb:.2f} MB)")
+
+        # Importar logs por lotes (límite de 10000 líneas por archivo para rapidez)
+        total_imported = 0
+
+        for log_type, info in available_logs.items():
+            log_path = info['path']
+            print(f"\n📥 Importando {log_type} desde {log_path}...")
+
+            try:
+                if 'nginx_access' in log_type:
+                    result = log_analyzer.import_nginx_access_logs(log_path, limit=10000)
+                elif 'ssh' in log_type:
+                    result = log_analyzer.import_ssh_auth_logs(log_path, limit=10000)
+                else:
+                    continue
+
+                if result.get('success'):
+                    events_created = result.get('events_created', 0)
+                    total_imported += events_created
+                    print(f"   ✅ {events_created} eventos creados")
+
+                    # Mostrar IPs sospechosas detectadas
+                    if result.get('suspicious_ips'):
+                        print(f"   🔍 {len(result['suspicious_ips'])} IPs sospechosas detectadas")
+                    if result.get('brute_force_ips'):
+                        print(f"   ⚠️  {len(result['brute_force_ips'])} IPs con brute force detectadas")
+
+                        # Auto-bloquear IPs con brute force crítico
+                        for bf_ip in result['brute_force_ips'][:5]:  # Top 5
+                            if bf_ip['failed_attempts'] >= 10:
+                                try:
+                                    self.db.block_ip(
+                                        ip_address=bf_ip['ip'],
+                                        reason=f"Auto-bloqueado: {bf_ip['failed_attempts']} intentos SSH fallidos (detectado en logs históricos)",
+                                        blocked_by='ml_auto',
+                                        duration_hours=48
+                                    )
+                                    print(f"   🚫 IP {bf_ip['ip']} bloqueada automáticamente ({bf_ip['failed_attempts']} intentos)")
+                                except:
+                                    pass
+                else:
+                    print(f"   ❌ Error: {result.get('error', 'Unknown error')}")
+
+            except Exception as e:
+                print(f"   ❌ Error importando {log_type}: {str(e)}")
+                continue
+
+        return total_imported

@@ -436,16 +436,18 @@ class LogAnalyzer:
 
                         try:
                             timestamp = self.parse_nginx_timestamp(timestamp_str)
+                            # Incluir método HTTP en los detalles
+                            import json
+                            details_dict = {'method': method, 'status': status, 'attack_types': attack_types}
                             self.db.log_security_event(
                                 event_type=event_type,
                                 severity=severity,
                                 source_ip=ip_address,
                                 protocol='http',
-                                request_method=method,
                                 request_path=path[:500],
                                 user_agent=user_agent[:500],
                                 attack_vector=attack_vector,
-                                description=description,
+                                details=json.dumps(details_dict),
                                 timestamp=timestamp
                             )
                             events_created += 1
