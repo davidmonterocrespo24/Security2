@@ -440,8 +440,28 @@ class MLTrafficDetector:
         if self.model is None:
             return []
 
+        print(f"\n🔍 Analizando eventos de las últimas {hours_back} horas...")
+        print(f"   Umbral de confianza mínimo: {min_confidence*100:.0f}%")
+
         # Obtener eventos recientes
-        events = self.db.get_security_events(limit=1000)
+        events = self.db.get_security_events(limit=5000)
+
+        # Filtrar por tiempo
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+        filtered_events = []
+        for event in events:
+            timestamp = event.get('timestamp')
+            if timestamp:
+                if isinstance(timestamp, str):
+                    event_time = datetime.fromisoformat(timestamp)
+                else:
+                    event_time = timestamp
+
+                if event_time >= cutoff_time:
+                    filtered_events.append(event)
+
+        events = filtered_events
+        print(f"   ✅ {len(events)} eventos encontrados en ese período")
 
         # Agrupar por IP
         ip_events = {}
@@ -456,6 +476,8 @@ class MLTrafficDetector:
 
         # Analizar cada IP
         suspicious_ips = []
+
+        print(f"\n📊 Analizando {len(ip_events)} IPs únicas...")
 
         for ip, events_list in ip_events.items():
             # Predecir para cada evento
@@ -495,6 +517,14 @@ class MLTrafficDetector:
 
         # Ordenar por confianza
         suspicious_ips.sort(key=lambda x: x['ml_confidence'], reverse=True)
+
+        print(f"\n✅ Análisis completado:")
+        print(f"   - IPs sospechosas encontradas: {len(suspicious_ips)}")
+        print(f"   - IPs analizadas: {len(ip_events)}")
+        if suspicious_ips:
+            print(f"\n🎯 Top 5 IPs más sospechosas:")
+            for idx, ip_info in enumerate(suspicious_ips[:5], 1):
+                print(f"   {idx}. {ip_info['ip_address']} - Confianza: {ip_info['ml_confidence']*100:.1f}% - Eventos: {ip_info['total_events']}")
 
         return suspicious_ips
 
