@@ -65,7 +65,6 @@ config_manager = ConfigManager()
 db_manager = DatabaseManager()
 firewall_manager = FirewallManager()
 fail2ban_manager = Fail2banManager()
-log_analyzer = LogAnalyzer()
 port_scanner = PortScanner()
 bot_detector = BotDetector()
 installer = SystemInstaller()
@@ -74,6 +73,7 @@ threat_detector = ThreatDetector()
 # Inicializar módulos de seguridad avanzada
 attack_detector = AttackDetector(db_manager)
 geo_intelligence = GeoIntelligence(db_manager)
+log_analyzer = LogAnalyzer(db_manager, attack_detector)
 
 # Inicializar detector ML
 from modules.ml_detector import MLTrafficDetector
@@ -290,6 +290,13 @@ def ml_training_page():
 def ml_suggestions_page():
     """Página de sugerencias ML"""
     return render_template('ml_suggestions.html')
+
+
+@app.route('/log-import')
+@login_required
+def log_import_page():
+    """Página de importación de logs históricos"""
+    return render_template('log_import.html')
 
 
 # ==================== API ENDPOINTS ====================
@@ -775,6 +782,58 @@ def add_to_blacklist():
 
     result = db_manager.add_to_blacklist(ip_address, reason, current_user.username)
     return jsonify({'success': result})
+
+
+# --- Importación de Logs Históricos ---
+@app.route('/api/logs/available-files', methods=['GET'])
+@login_required
+def get_available_log_files():
+    """Obtener archivos de logs disponibles en el sistema"""
+    available = log_analyzer.get_available_log_files()
+    return jsonify({'available_logs': available})
+
+
+@app.route('/api/logs/import/nginx-access', methods=['POST'])
+@login_required
+def import_nginx_access_logs():
+    """Importar logs de Nginx access.log"""
+    data = request.json
+    log_file_path = data.get('log_file_path')
+    limit = data.get('limit')
+
+    result = log_analyzer.import_nginx_access_logs(log_file_path, limit=limit)
+    return jsonify(result)
+
+
+@app.route('/api/logs/import/ssh-auth', methods=['POST'])
+@login_required
+def import_ssh_auth_logs():
+    """Importar logs de SSH auth.log"""
+    data = request.json
+    log_file_path = data.get('log_file_path')
+    limit = data.get('limit')
+
+    result = log_analyzer.import_ssh_auth_logs(log_file_path, limit=limit)
+    return jsonify(result)
+
+
+@app.route('/api/logs/import/batch', methods=['POST'])
+@login_required
+def import_logs_batch():
+    """Importar múltiples archivos de logs"""
+    data = request.json
+    nginx_access = data.get('nginx_access')
+    nginx_error = data.get('nginx_error')
+    ssh_auth = data.get('ssh_auth')
+    limit_per_file = data.get('limit_per_file')
+
+    result = log_analyzer.batch_import_logs(
+        nginx_access=nginx_access,
+        nginx_error=nginx_error,
+        ssh_auth=ssh_auth,
+        limit_per_file=limit_per_file
+    )
+    return jsonify(result)
 
 
 # --- Machine Learning ---

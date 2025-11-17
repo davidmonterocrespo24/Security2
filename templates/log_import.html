@@ -1,0 +1,505 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Logs Históricos - Sistema de Seguridad{% endblock %}
+{% block header %}Importar Logs Históricos{% endblock %}
+
+{% block content %}
+<!-- Descripción -->
+<div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+    <div class="flex">
+        <div class="flex-shrink-0">
+            <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+        </div>
+        <div class="ml-3">
+            <h3 class="text-sm font-medium text-blue-800">Importar logs históricos para entrenar el modelo ML</h3>
+            <div class="mt-2 text-sm text-blue-700">
+                <p>Esta herramienta analiza logs de Nginx y SSH, detecta ataques y crea eventos de seguridad en la base de datos.
+                   Los eventos generados pueden usarse para entrenar el modelo de Machine Learning.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas Rápidas -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- Total Eventos en DB -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Eventos en Base de Datos</p>
+                <p class="text-3xl font-bold text-gray-800" id="total-db-events">0</p>
+            </div>
+            <div class="bg-purple-100 p-3 rounded-full">
+                <i class="fas fa-database text-purple-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Eventos Importados (Sesión) -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Eventos Importados</p>
+                <p class="text-3xl font-bold text-gray-800" id="imported-events">0</p>
+            </div>
+            <div class="bg-green-100 p-3 rounded-full">
+                <i class="fas fa-file-import text-green-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Procesados -->
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600 mb-1">Archivos Procesados</p>
+                <p class="text-3xl font-bold text-gray-800" id="files-processed">0</p>
+            </div>
+            <div class="bg-blue-100 p-3 rounded-full">
+                <i class="fas fa-file-alt text-blue-600 text-2xl"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Archivos Disponibles -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-folder-open mr-2 text-blue-600"></i>
+        Archivos de Logs Disponibles
+    </h3>
+    <button onclick="detectLogFiles()" class="btn-primary mb-4">
+        <i class="fas fa-search mr-2"></i>Detectar Archivos
+    </button>
+    <div id="available-logs" class="space-y-3">
+        <p class="text-gray-500">Haz clic en "Detectar Archivos" para buscar logs en el sistema...</p>
+    </div>
+</div>
+
+<!-- Importación Manual -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-upload mr-2 text-blue-600"></i>
+        Importación Manual
+    </h3>
+
+    <div class="space-y-4">
+        <!-- Nginx Access Log -->
+        <div class="border rounded-lg p-4">
+            <h4 class="font-semibold mb-3 flex items-center">
+                <i class="fas fa-server mr-2 text-green-600"></i>
+                Nginx Access Log
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Ruta del archivo</label>
+                    <input type="text" id="nginx-access-path"
+                           class="w-full px-3 py-2 border rounded-lg"
+                           placeholder="/var/log/nginx/access.log">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Límite de líneas (opcional)</label>
+                    <input type="number" id="nginx-access-limit"
+                           class="w-full px-3 py-2 border rounded-lg"
+                           placeholder="10000">
+                </div>
+            </div>
+            <button onclick="importNginxAccess()" class="btn-primary mt-3">
+                <i class="fas fa-file-import mr-2"></i>Importar Nginx Access
+            </button>
+        </div>
+
+        <!-- SSH Auth Log -->
+        <div class="border rounded-lg p-4">
+            <h4 class="font-semibold mb-3 flex items-center">
+                <i class="fas fa-key mr-2 text-orange-600"></i>
+                SSH Auth Log
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Ruta del archivo</label>
+                    <input type="text" id="ssh-auth-path"
+                           class="w-full px-3 py-2 border rounded-lg"
+                           placeholder="/var/log/auth.log">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Límite de líneas (opcional)</label>
+                    <input type="number" id="ssh-auth-limit"
+                           class="w-full px-3 py-2 border rounded-lg"
+                           placeholder="10000">
+                </div>
+            </div>
+            <button onclick="importSSHAuth()" class="btn-primary mt-3">
+                <i class="fas fa-file-import mr-2"></i>Importar SSH Auth
+            </button>
+        </div>
+
+        <!-- Importación por Lotes -->
+        <div class="border rounded-lg p-4 bg-gray-50">
+            <h4 class="font-semibold mb-3 flex items-center">
+                <i class="fas fa-layer-group mr-2 text-purple-600"></i>
+                Importación por Lotes
+            </h4>
+            <p class="text-sm text-gray-600 mb-3">Importa múltiples archivos de una vez</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Límite por archivo</label>
+                    <input type="number" id="batch-limit"
+                           class="w-full px-3 py-2 border rounded-lg"
+                           placeholder="5000">
+                </div>
+            </div>
+            <button onclick="importBatch()" class="btn-secondary">
+                <i class="fas fa-boxes mr-2"></i>Importar Todos los Logs Disponibles
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Progreso de Importación -->
+<div id="import-progress" class="bg-white rounded-lg shadow-md p-6 mb-8 hidden">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-tasks mr-2 text-blue-600"></i>
+        Progreso de Importación
+    </h3>
+    <div class="space-y-3">
+        <div>
+            <div class="flex justify-between text-sm mb-1">
+                <span id="progress-label">Procesando...</span>
+                <span id="progress-percent">0%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div id="progress-bar" class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+        <div id="progress-details" class="text-sm text-gray-600 space-y-1">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+</div>
+
+<!-- Resultados -->
+<div id="import-results" class="bg-white rounded-lg shadow-md p-6 hidden">
+    <h3 class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-chart-bar mr-2 text-blue-600"></i>
+        Resultados de Importación
+    </h3>
+    <div id="results-content" class="space-y-4">
+        <!-- Se llenará dinámicamente -->
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let sessionImportedEvents = 0;
+let sessionFilesProcessed = 0;
+
+// Cargar estadísticas al inicio
+async function loadStats() {
+    try {
+        const response = await fetch('/api/security/events?limit=1');
+        const data = await response.json();
+        // Estimación aproximada del total
+        document.getElementById('total-db-events').textContent = data.events.length > 0 ? '...' : '0';
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+// Detectar archivos de logs disponibles
+async function detectLogFiles() {
+    try {
+        const response = await fetch('/api/logs/available-files');
+        const data = await response.json();
+
+        const container = document.getElementById('available-logs');
+        container.innerHTML = '';
+
+        const logs = data.available_logs;
+
+        if (Object.keys(logs).length === 0) {
+            container.innerHTML = '<p class="text-gray-500">No se encontraron archivos de logs en las rutas comunes del sistema.</p>';
+            return;
+        }
+
+        for (const [logType, info] of Object.entries(logs)) {
+            const size = (info.size / 1024 / 1024).toFixed(2);
+            const modified = new Date(info.modified).toLocaleString('es-ES');
+
+            const icon = logType.includes('nginx') ? 'fa-server text-green-600' : 'fa-key text-orange-600';
+            const title = logType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50';
+            div.innerHTML = `
+                <div class="flex items-center flex-1">
+                    <i class="fas ${icon} text-2xl mr-3"></i>
+                    <div class="flex-1">
+                        <p class="font-medium">${title}</p>
+                        <p class="text-xs text-gray-600">${info.path}</p>
+                        <p class="text-xs text-gray-500 mt-1">Tamaño: ${size} MB | Modificado: ${modified}</p>
+                    </div>
+                </div>
+                <button onclick="quickImport('${logType}', '${info.path}')" class="btn-secondary text-sm">
+                    <i class="fas fa-bolt mr-1"></i>Importar Rápido
+                </button>
+            `;
+            container.appendChild(div);
+        }
+    } catch (error) {
+        console.error('Error detecting log files:', error);
+        showNotification('Error al detectar archivos de logs', 'error');
+    }
+}
+
+// Importación rápida desde archivos detectados
+async function quickImport(logType, path) {
+    const limit = 5000; // Límite por defecto para importación rápida
+
+    if (logType.includes('nginx_access')) {
+        await importLog('/api/logs/import/nginx-access', path, limit, 'Nginx Access');
+    } else if (logType.includes('ssh')) {
+        await importLog('/api/logs/import/ssh-auth', path, limit, 'SSH Auth');
+    }
+}
+
+// Importar Nginx Access Log
+async function importNginxAccess() {
+    const path = document.getElementById('nginx-access-path').value;
+    const limit = document.getElementById('nginx-access-limit').value || null;
+
+    if (!path) {
+        showNotification('Por favor ingresa la ruta del archivo', 'error');
+        return;
+    }
+
+    await importLog('/api/logs/import/nginx-access', path, limit, 'Nginx Access');
+}
+
+// Importar SSH Auth Log
+async function importSSHAuth() {
+    const path = document.getElementById('ssh-auth-path').value;
+    const limit = document.getElementById('ssh-auth-limit').value || null;
+
+    if (!path) {
+        showNotification('Por favor ingresa la ruta del archivo', 'error');
+        return;
+    }
+
+    await importLog('/api/logs/import/ssh-auth', path, limit, 'SSH Auth');
+}
+
+// Función genérica para importar logs
+async function importLog(endpoint, path, limit, logName) {
+    showProgress(`Importando ${logName}...`, 0);
+
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                log_file_path: path,
+                limit: limit ? parseInt(limit) : null
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            sessionImportedEvents += result.events_created;
+            sessionFilesProcessed += 1;
+
+            document.getElementById('imported-events').textContent = sessionImportedEvents;
+            document.getElementById('files-processed').textContent = sessionFilesProcessed;
+
+            showResults(logName, result);
+            hideProgress();
+            showNotification(`${logName}: ${result.events_created} eventos creados`, 'success');
+        } else {
+            hideProgress();
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error importing log:', error);
+        hideProgress();
+        showNotification('Error al importar log', 'error');
+    }
+}
+
+// Importar por lotes
+async function importBatch() {
+    const limit = document.getElementById('batch-limit').value || null;
+
+    showProgress('Detectando archivos disponibles...', 10);
+
+    try {
+        // Primero detectar archivos disponibles
+        const detectResponse = await fetch('/api/logs/available-files');
+        const detectData = await detectResponse.json();
+        const logs = detectData.available_logs;
+
+        if (Object.keys(logs).length === 0) {
+            hideProgress();
+            showNotification('No se encontraron archivos de logs disponibles', 'error');
+            return;
+        }
+
+        showProgress('Importando archivos por lotes...', 30);
+
+        // Importar por lotes
+        const response = await fetch('/api/logs/import/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nginx_access: logs.nginx_access?.path,
+                nginx_error: logs.nginx_error?.path,
+                ssh_auth: logs.ssh_auth?.path,
+                limit_per_file: limit ? parseInt(limit) : null
+            })
+        });
+
+        const result = await response.json();
+
+        sessionImportedEvents += result.total_events;
+        sessionFilesProcessed += result.logs_processed.length;
+
+        document.getElementById('imported-events').textContent = sessionImportedEvents;
+        document.getElementById('files-processed').textContent = sessionFilesProcessed;
+
+        showBatchResults(result);
+        hideProgress();
+        showNotification(`${result.total_events} eventos creados desde ${result.logs_processed.length} archivos`, 'success');
+
+    } catch (error) {
+        console.error('Error importing batch:', error);
+        hideProgress();
+        showNotification('Error en importación por lotes', 'error');
+    }
+}
+
+// Mostrar progreso
+function showProgress(label, percent) {
+    const progressDiv = document.getElementById('import-progress');
+    progressDiv.classList.remove('hidden');
+
+    document.getElementById('progress-label').textContent = label;
+    document.getElementById('progress-percent').textContent = `${percent}%`;
+    document.getElementById('progress-bar').style.width = `${percent}%`;
+}
+
+// Ocultar progreso
+function hideProgress() {
+    setTimeout(() => {
+        document.getElementById('import-progress').classList.add('hidden');
+    }, 1000);
+}
+
+// Mostrar resultados de un archivo
+function showResults(logName, result) {
+    const resultsDiv = document.getElementById('import-results');
+    const contentDiv = document.getElementById('results-content');
+
+    resultsDiv.classList.remove('hidden');
+
+    const resultHTML = `
+        <div class="border-l-4 border-green-500 bg-green-50 p-4 rounded">
+            <h4 class="font-semibold text-green-800 mb-2">${logName}</h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                    <p class="text-gray-600">Eventos creados</p>
+                    <p class="font-bold text-green-700">${result.events_created}</p>
+                </div>
+                <div>
+                    <p class="text-gray-600">Eventos omitidos</p>
+                    <p class="font-bold">${result.events_skipped}</p>
+                </div>
+                <div>
+                    <p class="text-gray-600">Total líneas</p>
+                    <p class="font-bold">${result.total_lines}</p>
+                </div>
+                <div>
+                    <p class="text-gray-600">Errores</p>
+                    <p class="font-bold text-red-600">${result.errors?.length || 0}</p>
+                </div>
+            </div>
+            ${result.suspicious_ips && result.suspicious_ips.length > 0 ? `
+                <div class="mt-3">
+                    <p class="text-sm font-medium text-gray-700 mb-2">IPs Sospechosas Detectadas:</p>
+                    <div class="flex flex-wrap gap-2">
+                        ${result.suspicious_ips.slice(0, 10).map(ip => `
+                            <span class="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
+                                ${ip.ip} (${ip.attacks} ataques)
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            ${result.brute_force_ips && result.brute_force_ips.length > 0 ? `
+                <div class="mt-3">
+                    <p class="text-sm font-medium text-gray-700 mb-2">IPs con Brute Force Detectadas:</p>
+                    <div class="flex flex-wrap gap-2">
+                        ${result.brute_force_ips.slice(0, 10).map(ip => `
+                            <span class="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">
+                                ${ip.ip} (${ip.failed_attempts} intentos)
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    contentDiv.innerHTML = resultHTML + contentDiv.innerHTML;
+}
+
+// Mostrar resultados de importación por lotes
+function showBatchResults(result) {
+    const resultsDiv = document.getElementById('import-results');
+    const contentDiv = document.getElementById('results-content');
+
+    resultsDiv.classList.remove('hidden');
+
+    let resultsHTML = `
+        <div class="border-l-4 border-purple-500 bg-purple-50 p-4 rounded mb-4">
+            <h4 class="font-semibold text-purple-800 mb-2">Importación por Lotes Completada</h4>
+            <p class="text-sm text-gray-700">Total de eventos creados: <span class="font-bold">${result.total_events}</span></p>
+        </div>
+    `;
+
+    result.logs_processed.forEach(log => {
+        if (log.result.success) {
+            const logName = log.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            resultsHTML += `
+                <div class="border rounded p-3 mb-2">
+                    <h5 class="font-medium mb-2">${logName} - ${log.path}</h5>
+                    <div class="grid grid-cols-3 gap-3 text-sm">
+                        <div>
+                            <p class="text-gray-600">Creados</p>
+                            <p class="font-bold text-green-600">${log.result.events_created}</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Omitidos</p>
+                            <p class="font-bold">${log.result.events_skipped}</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Líneas</p>
+                            <p class="font-bold">${log.result.total_lines}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+
+    contentDiv.innerHTML = resultsHTML;
+}
+
+// Cargar estadísticas al inicio
+document.addEventListener('DOMContentLoaded', () => {
+    loadStats();
+    detectLogFiles(); // Detectar automáticamente
+});
+</script>
+{% endblock %}
