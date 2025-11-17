@@ -1,5 +1,6 @@
 """
 Módulo de Machine Learning para Detección de Tráfico Malicioso
+Con mejoras de explicabilidad (SHAP), análisis conductual y scoring de amenazas
 """
 
 import numpy as np
@@ -12,6 +13,14 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 import joblib
 import json
 import os
+
+# SHAP para explicaciones de modelo
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    SHAP_AVAILABLE = False
+    print("⚠️  SHAP no disponible. Instala con: pip install shap")
 
 
 class MLTrafficDetector:
@@ -437,9 +446,19 @@ class MLTrafficDetector:
         return " | ".join(reasons)
 
     def get_suspicious_ips(self, hours_back=24, min_confidence=0.6):
-        """Obtener IPs sospechosas según el modelo ML"""
+        """
+        Obtener IPs sospechosas según el modelo ML
+        Versión mejorada con análisis conductual y threat scoring
+        """
         if self.model is None:
             return []
+
+        # Importar funciones de mejoras ML
+        from modules.ml_enhancements import (
+            extract_ip_behavioral_features,
+            calculate_threat_score,
+            generate_enhanced_reason
+        )
 
         print(f"\n🔍 Analizando eventos de las últimas {hours_back} horas...")
         print(f"   Umbral de confianza mínimo: {min_confidence*100:.0f}%")
@@ -459,6 +478,7 @@ class MLTrafficDetector:
             # Si aún hay overflow, usar el valor máximo razonable (1 año)
             print(f"   ⚠️  Valor muy grande ({hours_back} horas), usando 365 días como máximo")
             cutoff_time = datetime.utcnow() - timedelta(days=365)
+
         filtered_events = []
         for event in events:
             timestamp = event.get('timestamp')
@@ -488,31 +508,70 @@ class MLTrafficDetector:
         # Analizar cada IP
         suspicious_ips = []
 
-        print(f"\n📊 Analizando {len(ip_events)} IPs únicas...")
+        print(f"\n📊 Analizando {len(ip_events)} IPs únicas con análisis conductual...")
 
         for ip, events_list in ip_events.items():
-            # Predecir para cada evento
+            # 1. Predecir para cada evento (ML básico)
             predictions = []
             for event in events_list:
                 pred = self.predict(event)
                 predictions.append(pred)
 
-            # Calcular métricas agregadas
+            # Calcular métricas agregadas básicas
             avg_confidence = np.mean([p['confidence'] for p in predictions])
             suspicious_count = sum(1 for p in predictions if p['is_suspicious'])
             anomaly_count = sum(1 for p in predictions if p['is_anomaly'])
 
             # Si la confianza promedio supera el umbral
             if avg_confidence >= min_confidence:
-                # Obtener geo info si está disponible
-                geo_info = None
+                # 2. Análisis Conductual (NUEVO)
+                behavioral_features = extract_ip_behavioral_features(ip, events_list)
+
+                # 3. Obtener información geográfica
                 country = 'Unknown'
+                country_code = 'XX'
+
+                # Intentar obtener país del evento primero
                 for event in events_list:
-                    if event.get('country'):
+                    if event.get('country') and event.get('country') != 'unknown':
                         country = event['country']
                         break
 
+                # Si no hay país en el evento, usar servicio de geolocalización
+                if country == 'Unknown' and self.geo_service:
+                    try:
+                        geo_info = self.geo_service.get_country_info(ip)
+                        if geo_info:
+                            country = f"{geo_info['country_name']} ({geo_info['country_code']})"
+                            country_code = geo_info['country_code']
+                    except Exception as e:
+                        pass  # Mantener Unknown si falla
+
+                # 4. Calcular Threat Score (NUEVO)
+                threat_score_info = calculate_threat_score(
+                    ip_address=ip,
+                    ml_confidence=avg_confidence,
+                    behavioral_features=behavioral_features,
+                    country_code=country_code
+                )
+
+                # 5. Generar Razón Mejorada (NUEVO)
+                # Obtener features del primer evento para análisis detallado
+                first_event_features = self.extract_features([events_list[0]])
+
+                enhanced_reason = generate_enhanced_reason(
+                    features_df=first_event_features,
+                    prediction=1 if avg_confidence >= 0.6 else 0,
+                    confidence=avg_confidence,
+                    behavioral_features=behavioral_features,
+                    threat_score_info=threat_score_info
+                )
+
+                # 6. Construir resultado mejorado
+                is_blocked = self.db.is_ip_blocked(ip)
+
                 suspicious_ips.append({
+                    # Campos originales
                     'ip_address': ip,
                     'ml_confidence': float(avg_confidence),
                     'total_events': len(events_list),
@@ -521,21 +580,43 @@ class MLTrafficDetector:
                     'country': country,
                     'first_seen': events_list[0].get('timestamp'),
                     'last_seen': events_list[-1].get('timestamp'),
-                    'reasons': predictions[0]['reason'] if predictions else 'No reason',
-                    'is_blocked': self.db.is_ip_blocked(ip),
-                    'recommended_action': 'block' if avg_confidence > 0.8 else 'monitor'
+                    'is_blocked': is_blocked,
+
+                    # Campos NUEVOS con mejoras
+                    'threat_score': threat_score_info['threat_score'],
+                    'recommended_action': threat_score_info['action'],
+                    'action_text': threat_score_info['action_text'],
+                    'action_description': threat_score_info['action_description'],
+                    'threat_color': threat_score_info['color'],
+                    'threat_priority': threat_score_info['priority'],
+                    'threat_factors': threat_score_info['factors'],
+                    'threat_factors_count': threat_score_info['factors_count'],
+
+                    # Razón mejorada
+                    'reasons': enhanced_reason,
+
+                    # Características conductuales
+                    'behavioral_features': behavioral_features,
+                    'requests_per_minute': behavioral_features['requests_per_minute'],
+                    'error_ratio': behavioral_features['error_ratio'],
+                    'is_bot': behavioral_features['is_rhythmic_bot'],
+                    'escalation_ratio': behavioral_features['escalation_ratio']
                 })
 
-        # Ordenar por confianza
-        suspicious_ips.sort(key=lambda x: x['ml_confidence'], reverse=True)
+        # Ordenar por threat score (en lugar de solo confianza ML)
+        suspicious_ips.sort(key=lambda x: x['threat_score'], reverse=True)
 
         print(f"\n✅ Análisis completado:")
         print(f"   - IPs sospechosas encontradas: {len(suspicious_ips)}")
         print(f"   - IPs analizadas: {len(ip_events)}")
+
         if suspicious_ips:
-            print(f"\n🎯 Top 5 IPs más sospechosas:")
+            print(f"\n🎯 Top 5 IPs más peligrosas (por Threat Score):")
             for idx, ip_info in enumerate(suspicious_ips[:5], 1):
-                print(f"   {idx}. {ip_info['ip_address']} - Confianza: {ip_info['ml_confidence']*100:.1f}% - Eventos: {ip_info['total_events']}")
+                score = ip_info['threat_score']
+                action = ip_info['action_text']
+                print(f"   {idx}. {ip_info['ip_address']} - Score: {score}/100 {action}")
+                print(f"      ML: {ip_info['ml_confidence']*100:.1f}% | Eventos: {ip_info['total_events']} | {ip_info['requests_per_minute']:.1f} req/min")
 
         return suspicious_ips
 

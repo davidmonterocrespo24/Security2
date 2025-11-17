@@ -402,6 +402,48 @@ class GeoConfig(Base):
         }
 
 
+class MLPrediction(Base):
+    """Caché de predicciones ML para IPs"""
+    __tablename__ = 'ml_predictions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ip_address = Column(String, nullable=False, index=True)
+    analyzed_at = Column(DateTime, default=datetime.utcnow, index=True)
+    ml_confidence = Column(Float, nullable=False, index=True)
+    is_suspicious = Column(Boolean, default=False, index=True)
+    is_anomaly = Column(Boolean, default=False)
+    total_events = Column(Integer, default=0)
+    suspicious_events = Column(Integer, default=0)
+    anomaly_events = Column(Integer, default=0)
+    country = Column(String)
+    country_code = Column(String)
+    first_seen = Column(DateTime)
+    last_seen = Column(DateTime)
+    reasons = Column(Text)  # Razones del modelo
+    recommended_action = Column(String)  # block, monitor, ignore
+    is_blocked = Column(Boolean, default=False)
+    model_version = Column(String)  # Versión del modelo usado
+    is_valid = Column(Boolean, default=True, index=True)  # False si necesita recalcular
+
+    def to_dict(self):
+        return {
+            'ip_address': self.ip_address,
+            'analyzed_at': self.analyzed_at.isoformat() if self.analyzed_at else None,
+            'ml_confidence': self.ml_confidence,
+            'is_suspicious': self.is_suspicious,
+            'is_anomaly': self.is_anomaly,
+            'total_events': self.total_events,
+            'suspicious_events': self.suspicious_events,
+            'anomaly_events': self.anomaly_events,
+            'country': self.country,
+            'first_seen': self.first_seen.isoformat() if self.first_seen else None,
+            'last_seen': self.last_seen.isoformat() if self.last_seen else None,
+            'reasons': self.reasons,
+            'recommended_action': self.recommended_action,
+            'is_blocked': self.is_blocked
+        }
+
+
 # Función para inicializar la base de datos
 def init_database():
     """Crear todas las tablas si no existen"""

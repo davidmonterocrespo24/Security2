@@ -75,13 +75,13 @@ attack_detector = AttackDetector(db_manager)
 geo_intelligence = GeoIntelligence(db_manager)
 log_analyzer = LogAnalyzer(db_manager, attack_detector)
 
-# Inicializar detector ML
-from modules.ml_detector import MLTrafficDetector
-ml_detector = MLTrafficDetector(db_manager)
-
-# Inicializar servicio de geolocalización
+# Inicializar servicio de geolocalización PRIMERO
 from modules.geo_service import GeoLocationService
 geo_service = GeoLocationService(db_manager)
+
+# Inicializar detector ML CON geo_service
+from modules.ml_detector import MLTrafficDetector
+ml_detector = MLTrafficDetector(db_manager, geo_service=geo_service)
 
 
 # ==================== MIDDLEWARE DE SEGURIDAD ====================
