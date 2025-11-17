@@ -939,3 +939,141 @@ class DatabaseManager:
             return False
         finally:
             session.close()
+
+    # ==================== CACHÉ DE PREDICCIONES ML ====================
+
+    def save_ml_prediction(self, ip_address, prediction_data, model_version='1.0'):
+        """Guardar predicción ML para una IP en caché"""
+        session = self.get_session()
+        try:
+            # Buscar predicción existente
+            existing = session.query(MLPrediction).filter_by(ip_address=ip_address).first()
+
+            if existing:
+                # Actualizar existente
+                existing.analyzed_at = datetime.utcnow()
+                existing.ml_confidence = prediction_data.get('ml_confidence', 0.0)
+                existing.is_suspicious = prediction_data.get('ml_confidence', 0.0) >= 0.6
+                existing.is_anomaly = prediction_data.get('is_anomaly', False)
+                existing.total_events = prediction_data.get('total_events', 0)
+                existing.suspicious_events = prediction_data.get('suspicious_events', 0)
+                existing.anomaly_events = prediction_data.get('anomaly_events', 0)
+                existing.country = prediction_data.get('country', 'Unknown')
+                existing.country_code = prediction_data.get('country_code', 'XX')
+                existing.first_seen = prediction_data.get('first_seen')
+                existing.last_seen = prediction_data.get('last_seen')
+                existing.reasons = prediction_data.get('reasons', '')
+                existing.recommended_action = prediction_data.get('recommended_action', 'monitor')
+                existing.is_blocked = prediction_data.get('is_blocked', False)
+                existing.model_version = model_version
+                existing.is_valid = True
+                # Nuevos campos de mejoras ML
+                existing.threat_score = prediction_data.get('threat_score', 0.0)
+                existing.action_text = prediction_data.get('action_text', '')
+                existing.behavioral_features = json.dumps(prediction_data.get('behavioral_features', {}))
+                existing.threat_factors = json.dumps(prediction_data.get('threat_factors', []))
+                existing.requests_per_minute = prediction_data.get('requests_per_minute', 0.0)
+                existing.error_ratio = prediction_data.get('error_ratio', 0.0)
+                existing.is_bot = prediction_data.get('is_bot', False)
+            else:
+                # Crear nueva predicción
+                prediction = MLPrediction(
+                    ip_address=ip_address,
+                    ml_confidence=prediction_data.get('ml_confidence', 0.0),
+                    is_suspicious=prediction_data.get('ml_confidence', 0.0) >= 0.6,
+                    is_anomaly=prediction_data.get('is_anomaly', False),
+                    total_events=prediction_data.get('total_events', 0),
+                    suspicious_events=prediction_data.get('suspicious_events', 0),
+                    anomaly_events=prediction_data.get('anomaly_events', 0),
+                    country=prediction_data.get('country', 'Unknown'),
+                    country_code=prediction_data.get('country_code', 'XX'),
+                    first_seen=prediction_data.get('first_seen'),
+                    last_seen=prediction_data.get('last_seen'),
+                    reasons=prediction_data.get('reasons', ''),
+                    recommended_action=prediction_data.get('recommended_action', 'monitor'),
+                    is_blocked=prediction_data.get('is_blocked', False),
+                    model_version=model_version,
+                    is_valid=True,
+                    # Nuevos campos de mejoras ML
+                    threat_score=prediction_data.get('threat_score', 0.0),
+                    action_text=prediction_data.get('action_text', ''),
+                    behavioral_features=json.dumps(prediction_data.get('behavioral_features', {})),
+                    threat_factors=json.dumps(prediction_data.get('threat_factors', [])),
+                    requests_per_minute=prediction_data.get('requests_per_minute', 0.0),
+                    error_ratio=prediction_data.get('error_ratio', 0.0),
+                    is_bot=prediction_data.get('is_bot', False)
+                )
+                session.add(prediction)
+
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error saving ML prediction: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+        finally:
+            session.close()
+
+    def get_ml_predictions(self, hours_back=24, min_confidence=0.6, only_valid=True):
+        """Obtener predicciones ML en caché"""
+        session = self.get_session()
+        try:
+            # Calcular cutoff time
+            try:
+                if hours_back > 24 * 365:
+                    days_back = hours_back / 24
+                    cutoff_time = datetime.utcnow() - timedelta(days=days_back)
+                else:
+                    cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+            except OverflowError:
+                cutoff_time = datetime.utcnow() - timedelta(days=365)
+
+            query = session.query(MLPrediction).filter(
+                MLPrediction.ml_confidence >= min_confidence,
+                MLPrediction.last_seen >= cutoff_time  # Filtrar por última actividad
+            )
+
+            if only_valid:
+                query = query.filter(MLPrediction.is_valid == True)
+
+            predictions = query.order_by(desc(MLPrediction.threat_score)).all()
+
+            return [pred.to_dict() for pred in predictions]
+        finally:
+            session.close()
+
+    def invalidate_ml_predictions(self):
+        """Invalidar todas las predicciones ML (cuando se re-entrena el modelo)"""
+        session = self.get_session()
+        try:
+            session.query(MLPrediction).update({'is_valid': False})
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error invalidating ML predictions: {e}")
+            return False
+        finally:
+            session.close()
+
+    def cleanup_old_predictions(self, days_old=30):
+        """Eliminar predicciones más antiguas de X días"""
+        session = self.get_session()
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days_old)
+
+            deleted = session.query(MLPrediction).filter(
+                MLPrediction.analyzed_at < cutoff
+            ).delete()
+
+            session.commit()
+            print(f"🗑️  Eliminadas {deleted} predicciones antiguas")
+            return deleted
+        except Exception as e:
+            session.rollback()
+            print(f"Error cleaning up predictions: {e}")
+            return 0
+        finally:
+            session.close()

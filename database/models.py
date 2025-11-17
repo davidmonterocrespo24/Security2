@@ -425,7 +425,32 @@ class MLPrediction(Base):
     model_version = Column(String)  # Versión del modelo usado
     is_valid = Column(Boolean, default=True, index=True)  # False si necesita recalcular
 
+    # Nuevos campos para mejoras ML
+    threat_score = Column(Float, default=0.0, index=True)  # Threat Score 0-100
+    action_text = Column(String)  # Texto de acción recomendada
+    behavioral_features = Column(Text)  # JSON con features conductuales
+    threat_factors = Column(Text)  # JSON con factores de amenaza
+    requests_per_minute = Column(Float, default=0.0)
+    error_ratio = Column(Float, default=0.0)
+    is_bot = Column(Boolean, default=False)
+
     def to_dict(self):
+        # Parse JSON fields
+        behavioral_features_dict = {}
+        threat_factors_list = []
+
+        if self.behavioral_features:
+            try:
+                behavioral_features_dict = json.loads(self.behavioral_features)
+            except:
+                pass
+
+        if self.threat_factors:
+            try:
+                threat_factors_list = json.loads(self.threat_factors)
+            except:
+                pass
+
         return {
             'ip_address': self.ip_address,
             'analyzed_at': self.analyzed_at.isoformat() if self.analyzed_at else None,
@@ -440,7 +465,15 @@ class MLPrediction(Base):
             'last_seen': self.last_seen.isoformat() if self.last_seen else None,
             'reasons': self.reasons,
             'recommended_action': self.recommended_action,
-            'is_blocked': self.is_blocked
+            'is_blocked': self.is_blocked,
+            # Nuevos campos
+            'threat_score': self.threat_score,
+            'action_text': self.action_text,
+            'behavioral_features': behavioral_features_dict,
+            'threat_factors': threat_factors_list,
+            'requests_per_minute': self.requests_per_minute,
+            'error_ratio': self.error_ratio,
+            'is_bot': self.is_bot
         }
 
 
