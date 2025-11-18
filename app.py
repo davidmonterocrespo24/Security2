@@ -83,6 +83,20 @@ geo_service = GeoLocationService(db_manager)
 from modules.ml_detector import MLTrafficDetector
 ml_detector = MLTrafficDetector(db_manager, geo_service=geo_service)
 
+# Inicializar módulos de Zeek
+from modules.zeek_manager import ZeekManager
+from modules.zeek_analyzer import ZeekAnalyzer
+from modules.zeek_detections import ZeekDetections
+
+zeek_manager = ZeekManager(db_manager)
+zeek_analyzer = ZeekAnalyzer(db_manager)
+zeek_detections = ZeekDetections(db_manager)
+
+# Registrar blueprint de Zeek
+from routes.zeek_routes import create_zeek_blueprint
+zeek_blueprint = create_zeek_blueprint(zeek_manager, zeek_analyzer, zeek_detections)
+app.register_blueprint(zeek_blueprint)
+
 
 # ==================== MIDDLEWARE DE SEGURIDAD ====================
 

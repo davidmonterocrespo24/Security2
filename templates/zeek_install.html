@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}Instalar Zeek - Sistema de Seguridad{% endblock %}
+
+{% block header %}Instalación de Zeek Network Monitor{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Estado de Instalación -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+            Estado Actual
+        </h3>
+        <div id="installation-status" class="space-y-4">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+
+    <!-- Formulario de Instalación -->
+    <div id="install-form-container" class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-download text-green-600 mr-2"></i>
+            Instalación Automática
+        </h3>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Método de Instalación</label>
+                <select id="install-method" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="package">Desde Repositorio Oficial (Recomendado)</option>
+                    <option value="source" disabled>Compilar desde Código Fuente (No disponible)</option>
+                </select>
+                <p class="text-sm text-gray-500 mt-1">Se instalará la última versión estable de Zeek</p>
+            </div>
+
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4">
+                <div class="flex">
+                    <i class="fas fa-info-circle text-blue-600 mt-1 mr-3"></i>
+                    <div>
+                        <p class="text-sm text-gray-700"><strong>Nota:</strong> La instalación puede tardar 5-10 minutos.</p>
+                        <p class="text-sm text-gray-700 mt-1">Se requieren privilegios de superusuario (sudo).</p>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="startInstallation()" id="install-btn" class="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold">
+                <i class="fas fa-download mr-2"></i>
+                Iniciar Instalación
+            </button>
+        </div>
+    </div>
+
+    <!-- Progreso de Instalación -->
+    <div id="installation-progress" class="bg-white rounded-lg shadow p-6 hidden">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-spinner fa-spin text-blue-600 mr-2"></i>
+            Instalando Zeek...
+        </h3>
+
+        <!-- Barra de Progreso -->
+        <div class="mb-4">
+            <div class="w-full bg-gray-200 rounded-full h-4">
+                <div id="progress-bar" class="bg-blue-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="progress-text" class="text-sm text-gray-600 mt-2">Iniciando instalación...</p>
+        </div>
+
+        <!-- Pasos de Instalación -->
+        <div class="space-y-2" id="installation-steps">
+            <div class="flex items-center p-3 bg-gray-50 rounded" data-step="detect">
+                <i class="fas fa-circle text-gray-400 mr-3"></i>
+                <span class="text-gray-600">1. Detectando distribución de Linux</span>
+            </div>
+            <div class="flex items-center p-3 bg-gray-50 rounded" data-step="dependencies">
+                <i class="fas fa-circle text-gray-400 mr-3"></i>
+                <span class="text-gray-600">2. Instalando dependencias</span>
+            </div>
+            <div class="flex items-center p-3 bg-gray-50 rounded" data-step="repository">
+                <i class="fas fa-circle text-gray-400 mr-3"></i>
+                <span class="text-gray-600">3. Agregando repositorio de Zeek</span>
+            </div>
+            <div class="flex items-center p-3 bg-gray-50 rounded" data-step="install">
+                <i class="fas fa-circle text-gray-400 mr-3"></i>
+                <span class="text-gray-600">4. Instalando Zeek</span>
+            </div>
+            <div class="flex items-center p-3 bg-gray-50 rounded" data-step="configure">
+                <i class="fas fa-circle text-gray-400 mr-3"></i>
+                <span class="text-gray-600">5. Configurando Zeek</span>
+            </div>
+        </div>
+
+        <!-- Log Output -->
+        <div class="mt-4">
+            <h4 class="text-sm font-semibold text-gray-700 mb-2">Output de Instalación:</h4>
+            <div id="install-output" class="bg-gray-900 text-green-400 p-4 rounded font-mono text-xs h-64 overflow-y-auto">
+                Iniciando instalación...\n
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuración Post-Instalación -->
+    <div id="post-install-config" class="bg-white rounded-lg shadow p-6 hidden">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-cog text-purple-600 mr-2"></i>
+            Configuración Inicial
+        </h3>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Interfaz de Red a Monitorear
+                </label>
+                <select id="network-interface" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">Cargando interfaces...</option>
+                </select>
+                <p class="text-sm text-gray-500 mt-1">Selecciona la interfaz de red que Zeek monitoreará</p>
+            </div>
+
+            <button onclick="saveConfiguration()" class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                <i class="fas fa-save mr-2"></i>
+                Guardar y Continuar
+            </button>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    <div id="success-message" class="bg-white rounded-lg shadow p-6 hidden">
+        <div class="text-center">
+            <i class="fas fa-check-circle text-6xl text-green-600 mb-4"></i>
+            <h3 class="text-2xl font-bold text-gray-800 mb-2">¡Instalación Completada!</h3>
+            <p class="text-gray-600 mb-6">Zeek se ha instalado correctamente en tu sistema</p>
+
+            <div class="flex justify-center space-x-4">
+                <a href="/zeek/config" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                    <i class="fas fa-cog mr-2"></i>
+                    Ir a Configuración
+                </a>
+                <a href="/zeek/" class="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
+                    <i class="fas fa-home mr-2"></i>
+                    Dashboard de Zeek
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guía de Instalación Manual -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-book text-indigo-600 mr-2"></i>
+            ¿Prefieres Instalación Manual?
+        </h3>
+
+        <div class="prose prose-sm max-w-none">
+            <p class="text-gray-600">Si prefieres instalar Zeek manualmente, sigue estos pasos en tu terminal:</p>
+
+            <pre class="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto"><code># Ubuntu/Debian
+echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' | sudo tee /etc/apt/sources.list.d/zeek.list
+curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/zeek-archive-keyring.gpg > /dev/null
+sudo apt-get update
+sudo apt-get install zeek</code></pre>
+
+            <p class="text-gray-600 mt-4">Después de la instalación manual, regresa a esta página y haz clic en "Verificar Estado".</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let installationInterval = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        checkInstallationStatus();
+    });
+
+    async function checkInstallationStatus() {
+        try {
+            const response = await fetch('/zeek/api/status');
+            const data = await response.json();
+
+            const statusContainer = document.getElementById('installation-status');
+
+            if (data.installed) {
+                statusContainer.innerHTML = `
+                    <div class="flex items-center p-4 bg-green-50 border-l-4 border-green-500 rounded">
+                        <i class="fas fa-check-circle text-3xl text-green-600 mr-4"></i>
+                        <div>
+                            <p class="font-semibold text-green-800">Zeek ya está instalado</p>
+                            <p class="text-sm text-green-700">Versión: ${data.version || 'Desconocida'}</p>
+                            <p class="text-sm text-green-700">Estado: ${data.running ? 'Corriendo' : 'Detenido'}</p>
+                        </div>
+                    </div>
+                `;
+
+                // Ocultar formulario de instalación
+                document.getElementById('install-form-container').classList.add('hidden');
+            } else {
+                statusContainer.innerHTML = `
+                    <div class="flex items-center p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                        <i class="fas fa-exclamation-triangle text-3xl text-yellow-600 mr-4"></i>
+                        <div>
+                            <p class="font-semibold text-yellow-800">Zeek no está instalado</p>
+                            <p class="text-sm text-yellow-700">Utiliza el formulario a continuación para instalar Zeek automáticamente</p>
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error checking status:', error);
+        }
+    }
+
+    async function startInstallation() {
+        const method = document.getElementById('install-method').value;
+        const installBtn = document.getElementById('install-btn');
+
+        // Confirmar
+        if (!confirm('¿Iniciar instalación de Zeek? Este proceso puede tardar varios minutos.')) {
+            return;
+        }
+
+        // Deshabilitar botón
+        installBtn.disabled = true;
+        installBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Instalando...';
+
+        // Mostrar progreso
+        document.getElementById('install-form-container').classList.add('hidden');
+        document.getElementById('installation-progress').classList.remove('hidden');
+
+        try {
+            updateProgress(20, 'Enviando solicitud de instalación...');
+            updateStep('detect', 'running');
+
+            const response = await fetch('/zeek/api/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({method: method})
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Simular pasos de instalación
+                await simulateInstallationSteps(data.output);
+
+                // Mostrar post-instalación
+                document.getElementById('installation-progress').classList.add('hidden');
+                document.getElementById('post-install-config').classList.remove('hidden');
+
+                // Cargar interfaces
+                loadNetworkInterfaces();
+            } else {
+                updateProgress(0, 'Error en la instalación');
+                appendOutput(`\nERROR: ${data.message}\n`);
+                appendOutput(data.output || '');
+                showNotification('Error en la instalación: ' + data.message, 'error');
+
+                // Restaurar botón
+                installBtn.disabled = false;
+                installBtn.innerHTML = '<i class="fas fa-download mr-2"></i> Reintentar Instalación';
+            }
+        } catch (error) {
+            console.error('Installation error:', error);
+            showNotification('Error durante la instalación', 'error');
+            installBtn.disabled = false;
+            installBtn.innerHTML = '<i class="fas fa-download mr-2"></i> Reintentar Instalación';
+        }
+    }
+
+    async function simulateInstallationSteps(output) {
+        updateProgress(30, 'Detectando distribución...');
+        updateStep('detect', 'completed');
+        await sleep(500);
+
+        updateProgress(45, 'Instalando dependencias...');
+        updateStep('dependencies', 'running');
+        appendOutput(output.substring(0, 200) + '...\n');
+        await sleep(1000);
+
+        updateProgress(60, 'Agregando repositorio de Zeek...');
+        updateStep('dependencies', 'completed');
+        updateStep('repository', 'running');
+        await sleep(500);
+
+        updateProgress(75, 'Instalando Zeek...');
+        updateStep('repository', 'completed');
+        updateStep('install', 'running');
+        appendOutput('\nInstalando paquete zeek...\n');
+        await sleep(2000);
+
+        updateProgress(90, 'Configurando Zeek...');
+        updateStep('install', 'completed');
+        updateStep('configure', 'running');
+        await sleep(500);
+
+        updateProgress(100, 'Instalación completada');
+        updateStep('configure', 'completed');
+        appendOutput('\n✓ Instalación completada exitosamente\n');
+    }
+
+    function updateProgress(percent, text) {
+        document.getElementById('progress-bar').style.width = percent + '%';
+        document.getElementById('progress-text').textContent = text;
+    }
+
+    function updateStep(stepName, status) {
+        const step = document.querySelector(`[data-step="${stepName}"]`);
+        if (!step) return;
+
+        const icon = step.querySelector('i');
+
+        if (status === 'running') {
+            icon.className = 'fas fa-spinner fa-spin text-blue-600 mr-3';
+            step.classList.remove('bg-gray-50');
+            step.classList.add('bg-blue-50');
+        } else if (status === 'completed') {
+            icon.className = 'fas fa-check-circle text-green-600 mr-3';
+            step.classList.remove('bg-blue-50');
+            step.classList.add('bg-green-50');
+        }
+    }
+
+    function appendOutput(text) {
+        const output = document.getElementById('install-output');
+        output.textContent += text;
+        output.scrollTop = output.scrollHeight;
+    }
+
+    async function loadNetworkInterfaces() {
+        try {
+            const response = await fetch('/zeek/api/interfaces');
+            const data = await response.json();
+
+            const select = document.getElementById('network-interface');
+            select.innerHTML = '<option value="">Selecciona una interfaz...</option>';
+
+            data.interfaces.forEach(iface => {
+                if (iface.name !== 'lo') { // Ignorar loopback
+                    const option = document.createElement('option');
+                    option.value = iface.name;
+                    option.textContent = `${iface.name} (${iface.ip || 'Sin IP'}) - ${iface.status}`;
+                    select.appendChild(option);
+                }
+            });
+        } catch (error) {
+            console.error('Error loading interfaces:', error);
+        }
+    }
+
+    async function saveConfiguration() {
+        const interfaceName = document.getElementById('network-interface').value;
+
+        if (!interfaceName) {
+            showNotification('Por favor selecciona una interfaz de red', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch('/zeek/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({interface: interfaceName})
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('post-install-config').classList.add('hidden');
+                document.getElementById('success-message').classList.remove('hidden');
+                showNotification('Configuración guardada correctamente', 'success');
+            } else {
+                showNotification('Error al guardar configuración', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving configuration:', error);
+            showNotification('Error al guardar configuración', 'error');
+        }
+    }
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+</script>
+{% endblock %}

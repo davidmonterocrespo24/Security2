@@ -477,6 +477,441 @@ class MLPrediction(Base):
         }
 
 
+# ============================================================================
+# MODELOS DE ZEEK - Network Security Monitor Integration
+# ============================================================================
+
+class ZeekConnection(Base):
+    """Conexiones de red capturadas por Zeek (conn.log)"""
+    __tablename__ = 'zeek_connections'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    uid = Column(String, unique=True, index=True)  # Unique ID de Zeek
+
+    # Direcciones y puertos
+    source_ip = Column(String, nullable=False, index=True)
+    source_port = Column(Integer)
+    dest_ip = Column(String, nullable=False, index=True)
+    dest_port = Column(Integer, index=True)
+
+    # Protocolo y servicio
+    protocol = Column(String, index=True)  # tcp, udp, icmp
+    service = Column(String, index=True)   # http, ssh, dns, ssl, etc
+
+    # Duración y bytes
+    duration = Column(Float)
+    orig_bytes = Column(Integer, default=0)
+    resp_bytes = Column(Integer, default=0)
+
+    # Estado de conexión
+    conn_state = Column(String)  # S0, S1, SF, REJ, etc
+
+    # Paquetes
+    orig_pkts = Column(Integer, default=0)
+    resp_pkts = Column(Integer, default=0)
+
+    # Localización
+    local_orig = Column(Boolean, default=False)
+    local_resp = Column(Boolean, default=False)
+
+    # Historia de conexión
+    history = Column(String)
+
+    # Análisis ML
+    is_suspicious = Column(Boolean, default=False, index=True)
+    ml_analyzed = Column(Boolean, default=False)
+    threat_score = Column(Float)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'uid': self.uid,
+            'source_ip': self.source_ip,
+            'source_port': self.source_port,
+            'dest_ip': self.dest_ip,
+            'dest_port': self.dest_port,
+            'protocol': self.protocol,
+            'service': self.service,
+            'duration': self.duration,
+            'orig_bytes': self.orig_bytes,
+            'resp_bytes': self.resp_bytes,
+            'conn_state': self.conn_state,
+            'is_suspicious': self.is_suspicious
+        }
+
+
+class ZeekDNS(Base):
+    """Queries DNS capturadas por Zeek (dns.log)"""
+    __tablename__ = 'zeek_dns'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    uid = Column(String, index=True)
+
+    # IPs
+    source_ip = Column(String, nullable=False, index=True)
+    dest_ip = Column(String)
+
+    # Query DNS
+    query = Column(String, nullable=False, index=True)
+    query_type = Column(String)  # A, AAAA, PTR, MX, etc
+    query_class = Column(String)
+
+    # Respuesta
+    rcode = Column(Integer)  # Response code
+    rcode_name = Column(String)  # NOERROR, NXDOMAIN, etc
+    answers = Column(Text)  # JSON list de respuestas
+    ttls = Column(Text)  # JSON list de TTLs
+
+    # Flags
+    AA = Column(Boolean, default=False)  # Authoritative Answer
+    TC = Column(Boolean, default=False)  # Truncated
+    RD = Column(Boolean, default=False)  # Recursion Desired
+    RA = Column(Boolean, default=False)  # Recursion Available
+
+    # Análisis
+    is_suspicious = Column(Boolean, default=False, index=True)
+    is_tunneling = Column(Boolean, default=False)  # DNS tunneling detected
+    query_entropy = Column(Float)  # Entropía de query (DGA detection)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'source_ip': self.source_ip,
+            'query': self.query,
+            'query_type': self.query_type,
+            'rcode_name': self.rcode_name,
+            'is_suspicious': self.is_suspicious,
+            'is_tunneling': self.is_tunneling
+        }
+
+
+class ZeekSSL(Base):
+    """Conexiones SSL/TLS capturadas por Zeek (ssl.log)"""
+    __tablename__ = 'zeek_ssl'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    uid = Column(String, index=True)
+
+    # IPs
+    source_ip = Column(String, nullable=False, index=True)
+    dest_ip = Column(String)
+    dest_port = Column(Integer)
+
+    # Versión SSL/TLS
+    version = Column(String, index=True)  # TLSv1.2, TLSv1.3, etc
+
+    # Cipher suite
+    cipher = Column(String)
+    curve = Column(String)
+
+    # Certificado
+    server_name = Column(String, index=True)  # SNI
+    subject = Column(String)
+    issuer = Column(String)
+
+    # Validación
+    validation_status = Column(String)
+
+    # Certificado details
+    cert_chain_fuids = Column(Text)  # File UIDs de certificados
+    client_cert_chain_fuids = Column(Text)
+
+    # Fechas del certificado
+    not_valid_before = Column(DateTime)
+    not_valid_after = Column(DateTime)
+
+    # Análisis de seguridad
+    is_self_signed = Column(Boolean, default=False, index=True)
+    is_expired = Column(Boolean, default=False, index=True)
+    is_weak_cipher = Column(Boolean, default=False)
+    is_suspicious = Column(Boolean, default=False, index=True)
+
+    # JA3 Fingerprint (opcional)
+    ja3 = Column(String, index=True)
+    ja3s = Column(String)  # Server JA3
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'source_ip': self.source_ip,
+            'dest_ip': self.dest_ip,
+            'version': self.version,
+            'server_name': self.server_name,
+            'is_self_signed': self.is_self_signed,
+            'is_expired': self.is_expired,
+            'is_suspicious': self.is_suspicious
+        }
+
+
+class ZeekHTTP(Base):
+    """Tráfico HTTP capturado por Zeek (http.log)"""
+    __tablename__ = 'zeek_http'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    uid = Column(String, index=True)
+
+    # IPs
+    source_ip = Column(String, nullable=False, index=True)
+    dest_ip = Column(String)
+    dest_port = Column(Integer)
+
+    # Request
+    method = Column(String, index=True)  # GET, POST, etc
+    host = Column(String, index=True)
+    uri = Column(Text)
+    referrer = Column(Text)
+    user_agent = Column(Text)
+
+    # Response
+    status_code = Column(Integer, index=True)
+    status_msg = Column(String)
+
+    # Tamaños
+    request_body_len = Column(Integer, default=0)
+    response_body_len = Column(Integer, default=0)
+
+    # Content type
+    resp_mime_types = Column(Text)  # JSON list
+
+    # Tags de Zeek
+    tags = Column(Text)  # JSON list de tags
+
+    # Análisis
+    is_suspicious = Column(Boolean, default=False, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'source_ip': self.source_ip,
+            'method': self.method,
+            'host': self.host,
+            'uri': self.uri,
+            'status_code': self.status_code,
+            'user_agent': self.user_agent,
+            'is_suspicious': self.is_suspicious
+        }
+
+
+class ZeekFiles(Base):
+    """Archivos detectados por Zeek (files.log)"""
+    __tablename__ = 'zeek_files'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    fuid = Column(String, unique=True, index=True)  # File UID
+
+    # Conexión relacionada
+    conn_uids = Column(Text)  # JSON list de UIDs
+
+    # IPs
+    source_ip = Column(String, index=True)
+    dest_ip = Column(String)
+
+    # Archivo
+    filename = Column(String)
+    mime_type = Column(String, index=True)
+
+    # Tamaño
+    total_bytes = Column(Integer)
+    seen_bytes = Column(Integer)
+    missing_bytes = Column(Integer)
+
+    # Hashes
+    md5 = Column(String, index=True)
+    sha1 = Column(String, index=True)
+    sha256 = Column(String, index=True)
+
+    # Protocolo de origen
+    source_protocol = Column(String)  # HTTP, SMTP, FTP, etc
+
+    # Análisis
+    is_malware = Column(Boolean, default=False, index=True)
+    is_suspicious = Column(Boolean, default=False, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'fuid': self.fuid,
+            'source_ip': self.source_ip,
+            'filename': self.filename,
+            'mime_type': self.mime_type,
+            'total_bytes': self.total_bytes,
+            'md5': self.md5,
+            'is_malware': self.is_malware
+        }
+
+
+class ZeekNotice(Base):
+    """Alertas/Notices generadas por Zeek (notice.log)"""
+    __tablename__ = 'zeek_notices'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    uid = Column(String, index=True)
+
+    # IPs involucradas
+    source_ip = Column(String, index=True)
+    dest_ip = Column(String)
+    dest_port = Column(Integer)
+
+    # Notice
+    note = Column(String, nullable=False, index=True)  # Tipo de notice
+    msg = Column(Text, nullable=False)  # Mensaje
+    sub = Column(Text)  # Sub-mensaje
+
+    # Protocolo
+    protocol = Column(String)
+
+    # Acciones tomadas
+    actions = Column(Text)  # JSON list de acciones
+
+    # Severidad (custom)
+    severity = Column(String, default='medium', index=True)
+
+    # Archivo relacionado
+    file_mime_type = Column(String)
+    file_desc = Column(String)
+
+    # Supresión
+    suppress_for = Column(Float)  # Tiempo de supresión en segundos
+
+    # Estado
+    is_resolved = Column(Boolean, default=False, index=True)
+    resolved_at = Column(DateTime)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'source_ip': self.source_ip,
+            'dest_ip': self.dest_ip,
+            'note': self.note,
+            'msg': self.msg,
+            'severity': self.severity,
+            'is_resolved': self.is_resolved
+        }
+
+
+class ZeekConfig(Base):
+    """Configuración de Zeek"""
+    __tablename__ = 'zeek_config'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Estado de instalación
+    is_installed = Column(Boolean, default=False)
+    zeek_version = Column(String)
+    install_path = Column(String)
+
+    # Estado del servicio
+    is_running = Column(Boolean, default=False)
+    last_started = Column(DateTime)
+    last_stopped = Column(DateTime)
+
+    # Configuración de monitoreo
+    monitored_interface = Column(String)  # eth0, ens33, etc
+    log_dir = Column(String)  # Directorio de logs
+
+    # Opciones de logs
+    log_format = Column(String, default='json')  # json o ascii
+    log_rotation_interval = Column(Integer, default=3600)  # segundos
+
+    # Scripts habilitados
+    enabled_scripts = Column(Text)  # JSON list de scripts
+
+    # Importación automática
+    auto_import_enabled = Column(Boolean, default=True)
+    auto_import_interval = Column(Integer, default=300)  # segundos
+    last_import = Column(DateTime)
+
+    # Threat Intelligence
+    intel_enabled = Column(Boolean, default=False)
+    intel_sources = Column(Text)  # JSON list de fuentes
+
+    # Actualización
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_by = Column(String)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'is_installed': self.is_installed,
+            'zeek_version': self.zeek_version,
+            'is_running': self.is_running,
+            'monitored_interface': self.monitored_interface,
+            'log_dir': self.log_dir,
+            'auto_import_enabled': self.auto_import_enabled,
+            'intel_enabled': self.intel_enabled
+        }
+
+
+class ZeekStats(Base):
+    """Estadísticas agregadas de Zeek por hora"""
+    __tablename__ = 'zeek_stats'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hour_timestamp = Column(DateTime, nullable=False, index=True)
+
+    # Conexiones
+    total_connections = Column(Integer, default=0)
+    unique_source_ips = Column(Integer, default=0)
+    unique_dest_ips = Column(Integer, default=0)
+
+    # Protocolos
+    tcp_connections = Column(Integer, default=0)
+    udp_connections = Column(Integer, default=0)
+    icmp_connections = Column(Integer, default=0)
+
+    # Servicios top
+    top_services = Column(Text)  # JSON dict {service: count}
+
+    # DNS
+    dns_queries = Column(Integer, default=0)
+    dns_nxdomain = Column(Integer, default=0)
+
+    # SSL/TLS
+    ssl_connections = Column(Integer, default=0)
+    ssl_invalid_certs = Column(Integer, default=0)
+
+    # HTTP
+    http_requests = Column(Integer, default=0)
+    http_errors = Column(Integer, default=0)
+
+    # Archivos
+    files_transferred = Column(Integer, default=0)
+
+    # Alertas
+    notices_generated = Column(Integer, default=0)
+
+    # Tráfico
+    total_bytes_sent = Column(Integer, default=0)
+    total_bytes_received = Column(Integer, default=0)
+
+    # Port scans detectados
+    port_scans_detected = Column(Integer, default=0)
+
+    def to_dict(self):
+        return {
+            'hour_timestamp': self.hour_timestamp.isoformat() if self.hour_timestamp else None,
+            'total_connections': self.total_connections,
+            'unique_source_ips': self.unique_source_ips,
+            'dns_queries': self.dns_queries,
+            'ssl_connections': self.ssl_connections,
+            'http_requests': self.http_requests,
+            'notices_generated': self.notices_generated,
+            'port_scans_detected': self.port_scans_detected
+        }
+
+
 # Función para inicializar la base de datos
 def init_database():
     """Crear todas las tablas si no existen"""

@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Logs de Zeek{% endblock %}
+{% block header %}Visualización de Logs de Zeek{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Tabs -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="border-b border-gray-200">
+            <nav class="flex space-x-4 p-4">
+                <button onclick="switchTab('connections')" class="tab-btn px-4 py-2 rounded" data-tab="connections"><i class="fas fa-plug mr-2"></i> Conexiones</button>
+                <button onclick="switchTab('dns')" class="tab-btn px-4 py-2 rounded" data-tab="dns"><i class="fas fa-server mr-2"></i> DNS</button>
+                <button onclick="switchTab('ssl')" class="tab-btn px-4 py-2 rounded" data-tab="ssl"><i class="fas fa-lock mr-2"></i> SSL/TLS</button>
+                <button onclick="switchTab('http')" class="tab-btn px-4 py-2 rounded" data-tab="http"><i class="fas fa-globe mr-2"></i> HTTP</button>
+                <button onclick="switchTab('notices')" class="tab-btn px-4 py-2 rounded" data-tab="notices"><i class="fas fa-bell mr-2"></i> Alertas</button>
+            </nav>
+        </div>
+
+        <!-- Content -->
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <input type="text" id="search-input" placeholder="Buscar por IP..." class="px-4 py-2 border rounded w-96">
+                <div class="flex space-x-2">
+                    <select id="limit-select" class="px-4 py-2 border rounded">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="500">500</option>
+                    </select>
+                    <button onclick="loadCurrentTab()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"><i class="fas fa-sync mr-2"></i> Actualizar</button>
+                </div>
+            </div>
+
+            <div id="logs-container" class="overflow-x-auto">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentTab = 'connections';
+
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab') || 'connections';
+    switchTab(tab);
+});
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white');
+        btn.classList.add('text-gray-600');
+    });
+    const activeBtn = document.querySelector(`[data-tab="${tab}"]`);
+    if (activeBtn) {
+        activeBtn.classList.add('bg-blue-600', 'text-white');
+        activeBtn.classList.remove('text-gray-600');
+    }
+    loadCurrentTab();
+}
+
+async function loadCurrentTab() {
+    const limit = document.getElementById('limit-select').value;
+    const search = document.getElementById('search-input').value;
+    const container = document.getElementById('logs-container');
+
+    container.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-4xl text-gray-400"></i><p class="text-gray-600 mt-2">Cargando...</p></div>';
+
+    try {
+        const endpoints = {
+            connections: `/zeek/api/logs/connections?limit=${limit}${search ? `&source_ip=${search}` : ''}`,
+            dns: `/zeek/api/logs/dns?limit=${limit}${search ? `&source_ip=${search}` : ''}`,
+            ssl: `/zeek/api/logs/ssl?limit=${limit}${search ? `&source_ip=${search}` : ''}`,
+            http: `/zeek/api/logs/http?limit=${limit}${search ? `&source_ip=${search}` : ''}`,
+            notices: `/zeek/api/logs/notices?limit=${limit}`
+        };
+
+        const res = await fetch(endpoints[currentTab]);
+        const data = await res.json();
+
+        if (data.success) {
+            renderLogs(data, currentTab);
+        } else {
+            container.innerHTML = '<p class="text-red-600">Error al cargar logs</p>';
+        }
+    } catch (error) {
+        container.innerHTML = '<p class="text-red-600">Error de conexión</p>';
+    }
+}
+
+function renderLogs(data, type) {
+    const container = document.getElementById('logs-container');
+    let html = '<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
+
+    if (type === 'connections') {
+        const items = data.connections || [];
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source IP</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dest IP:Port</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Protocol</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bytes</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        items.forEach(item => {
+            html += `<tr><td class="px-6 py-4 text-sm">${item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm font-mono">${item.source_ip}</td>`;
+            html += `<td class="px-6 py-4 text-sm font-mono">${item.dest_ip}:${item.dest_port}</td>`;
+            html += `<td class="px-6 py-4 text-sm">${item.protocol || 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm">${item.service || '-'}</td>`;
+            html += `<td class="px-6 py-4 text-sm">${(item.orig_bytes || 0) + (item.resp_bytes || 0)}</td></tr>`;
+        });
+    } else if (type === 'dns') {
+        const items = data.dns_queries || [];
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source IP</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Query</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Response</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        items.forEach(item => {
+            html += `<tr><td class="px-6 py-4 text-sm">${item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm font-mono">${item.source_ip}</td>`;
+            html += `<td class="px-6 py-4 text-sm break-all max-w-md">${item.query}</td>`;
+            html += `<td class="px-6 py-4 text-sm">${item.query_type || 'A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm"><span class="px-2 py-1 text-xs rounded ${item.rcode_name === 'NOERROR' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${item.rcode_name || 'N/A'}</span></td></tr>`;
+        });
+    } else if (type === 'ssl') {
+        const items = data.ssl_connections || [];
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source IP</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Server Name</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Version</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        items.forEach(item => {
+            const warnings = [];
+            if (item.is_self_signed) warnings.push('Auto-firmado');
+            if (item.is_expired) warnings.push('Expirado');
+            html += `<tr><td class="px-6 py-4 text-sm">${item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm font-mono">${item.source_ip}</td>`;
+            html += `<td class="px-6 py-4 text-sm">${item.server_name || item.dest_ip}</td>`;
+            html += `<td class="px-6 py-4 text-sm">${item.version || 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm">${warnings.length > 0 ? '<span class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">' + warnings.join(', ') + '</span>' : '<span class="text-green-600">OK</span>'}</td></tr>`;
+        });
+    } else if (type === 'http') {
+        const items = data.http_requests || [];
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source IP</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Host</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">URI</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        items.forEach(item => {
+            html += `<tr><td class="px-6 py-4 text-sm">${item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm font-mono">${item.source_ip}</td>`;
+            html += `<td class="px-6 py-4 text-sm"><span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">${item.method}</span></td>`;
+            html += `<td class="px-6 py-4 text-sm">${item.host || 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm break-all max-w-md">${item.uri || '/'}</td>`;
+            html += `<td class="px-6 py-4 text-sm"><span class="px-2 py-1 text-xs rounded ${item.status_code < 400 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${item.status_code || 'N/A'}</span></td></tr>`;
+        });
+    } else if (type === 'notices') {
+        const items = data.notices || [];
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Note</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Message</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source IP</th>';
+        html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        items.forEach(item => {
+            html += `<tr><td class="px-6 py-4 text-sm">${item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm font-semibold">${item.note}</td>`;
+            html += `<td class="px-6 py-4 text-sm max-w-md">${item.msg}</td>`;
+            html += `<td class="px-6 py-4 text-sm font-mono">${item.source_ip || 'N/A'}</td>`;
+            html += `<td class="px-6 py-4 text-sm"><span class="px-2 py-1 text-xs rounded ${item.severity === 'critical' ? 'bg-red-600 text-white' : item.severity === 'high' ? 'bg-orange-600 text-white' : item.severity === 'medium' ? 'bg-yellow-600 text-white' : 'bg-blue-600 text-white'}">${item.severity.toUpperCase()}</span></td></tr>`;
+        });
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+</script>
+{% endblock %}

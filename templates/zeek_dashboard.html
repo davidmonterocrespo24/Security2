@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+
+{% block title %}Zeek Dashboard - Sistema de Seguridad{% endblock %}
+
+{% block header %}Zeek Network Monitor - Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Estado de Zeek -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">
+                <i class="fas fa-network-wired mr-2 text-blue-600"></i>
+                Estado de Zeek
+            </h3>
+            <div class="flex space-x-2">
+                <button onclick="checkZeekStatus()" class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm">
+                    <i class="fas fa-sync mr-1"></i> Actualizar
+                </button>
+            </div>
+        </div>
+
+        <div id="zeek-status" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+
+    <!-- Métricas Principales -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Total Conexiones -->
+        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-blue-100 text-sm">Total Conexiones</p>
+                    <p id="total-connections" class="text-3xl font-bold mt-2">0</p>
+                    <p class="text-blue-100 text-xs mt-1">Últimas 24 horas</p>
+                </div>
+                <i class="fas fa-plug text-4xl text-blue-300"></i>
+            </div>
+        </div>
+
+        <!-- DNS Queries -->
+        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-purple-100 text-sm">Queries DNS</p>
+                    <p id="total-dns" class="text-3xl font-bold mt-2">0</p>
+                    <p class="text-purple-100 text-xs mt-1">Últimas 24 horas</p>
+                </div>
+                <i class="fas fa-server text-4xl text-purple-300"></i>
+            </div>
+        </div>
+
+        <!-- SSL Connections -->
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-green-100 text-sm">Conexiones SSL</p>
+                    <p id="total-ssl" class="text-3xl font-bold mt-2">0</p>
+                    <p class="text-green-100 text-xs mt-1">Últimas 24 horas</p>
+                </div>
+                <i class="fas fa-lock text-4xl text-green-300"></i>
+            </div>
+        </div>
+
+        <!-- Alertas -->
+        <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow p-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-red-100 text-sm">Alertas Zeek</p>
+                    <p id="total-notices" class="text-3xl font-bold mt-2">0</p>
+                    <p class="text-red-100 text-xs mt-1"><span id="unresolved-notices">0</span> sin resolver</p>
+                </div>
+                <i class="fas fa-exclamation-triangle text-4xl text-red-300"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detecciones Recientes y Top IPs -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Port Scans Detectados -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-radar text-red-600 mr-2"></i>
+                    Port Scans Detectados
+                </h3>
+                <button onclick="loadPortScans()" class="text-blue-600 hover:text-blue-800 text-sm">
+                    <i class="fas fa-sync mr-1"></i> Actualizar
+                </button>
+            </div>
+            <div id="port-scans-list" class="space-y-2">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+
+        <!-- DNS Tunneling Detectado -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-tunnel text-orange-600 mr-2"></i>
+                    DNS Tunneling Detectado
+                </h3>
+                <button onclick="loadDNSAnalysis()" class="text-blue-600 hover:text-blue-800 text-sm">
+                    <i class="fas fa-sync mr-1"></i> Actualizar
+                </button>
+            </div>
+            <div id="dns-tunneling-list" class="space-y-2">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas Recientes y Certificados SSL Sospechosos -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Alertas Recientes -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-bell text-yellow-600 mr-2"></i>
+                    Alertas Recientes
+                </h3>
+                <a href="/zeek/logs?tab=notices" class="text-blue-600 hover:text-blue-800 text-sm">
+                    Ver todas <i class="fas fa-arrow-right ml-1"></i>
+                </a>
+            </div>
+            <div id="recent-notices" class="space-y-2">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+
+        <!-- SSL Sospechoso -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-certificate text-red-600 mr-2"></i>
+                    Certificados SSL Sospechosos
+                </h3>
+                <button onclick="loadSSLAnalysis()" class="text-blue-600 hover:text-blue-800 text-sm">
+                    <i class="fas fa-sync mr-1"></i> Actualizar
+                </button>
+            </div>
+            <div id="ssl-suspicious-list" class="space-y-2">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Accesos Rápidos -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-bolt text-yellow-500 mr-2"></i>
+            Accesos Rápidos
+        </h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <a href="/zeek/logs?tab=connections" class="flex flex-col items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition">
+                <i class="fas fa-plug text-3xl text-blue-600 mb-2"></i>
+                <span class="text-sm font-medium text-gray-700">Conexiones</span>
+            </a>
+            <a href="/zeek/logs?tab=dns" class="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition">
+                <i class="fas fa-server text-3xl text-purple-600 mb-2"></i>
+                <span class="text-sm font-medium text-gray-700">DNS</span>
+            </a>
+            <a href="/zeek/logs?tab=ssl" class="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition">
+                <i class="fas fa-lock text-3xl text-green-600 mb-2"></i>
+                <span class="text-sm font-medium text-gray-700">SSL/TLS</span>
+            </a>
+            <a href="/zeek/logs?tab=http" class="flex flex-col items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition">
+                <i class="fas fa-globe text-3xl text-orange-600 mb-2"></i>
+                <span class="text-sm font-medium text-gray-700">HTTP</span>
+            </a>
+            <a href="/zeek/detections" class="flex flex-col items-center p-4 bg-red-50 rounded-lg hover:bg-red-100 transition">
+                <i class="fas fa-shield-alt text-3xl text-red-600 mb-2"></i>
+                <span class="text-sm font-medium text-gray-700">Detecciones</span>
+            </a>
+            <a href="/zeek/config" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                <i class="fas fa-cog text-3xl text-gray-600 mb-2"></i>
+                <span class="text-sm font-medium text-gray-700">Configuración</span>
+            </a>
+            <button onclick="importLogs()" class="flex flex-col items-center p-4 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition">
+                <i class="fas fa-download text-3xl text-indigo-600 mb-2"></i>
+                <span class="text-sm font-medium text-gray-700">Importar Logs</span>
+            </button>
+            <a href="/zeek/install" class="flex flex-col items-center p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition">
+                <i class="fas fa-wrench text-3xl text-yellow-600 mb-2"></i>
+                <span class="text-sm font-medium text-gray-700">Instalación</span>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Verificar estado de Zeek al cargar
+    document.addEventListener('DOMContentLoaded', function() {
+        checkZeekStatus();
+        loadStats();
+        loadPortScans();
+        loadDNSAnalysis();
+        loadRecentNotices();
+        loadSSLAnalysis();
+
+        // Auto-refresh cada 30 segundos
+        setInterval(() => {
+            loadStats();
+            loadRecentNotices();
+        }, 30000);
+    });
+
+    async function checkZeekStatus() {
+        try {
+            const response = await fetch('/zeek/api/status');
+            const data = await response.json();
+
+            const statusHTML = `
+                <div class="flex items-center ${data.installed ? 'text-green-600' : 'text-red-600'}">
+                    <i class="fas fa-${data.installed ? 'check-circle' : 'times-circle'} text-2xl mr-2"></i>
+                    <div>
+                        <p class="font-semibold">${data.installed ? 'Instalado' : 'No Instalado'}</p>
+                        <p class="text-sm text-gray-600">${data.version || 'N/A'}</p>
+                    </div>
+                </div>
+                <div class="flex items-center ${data.running ? 'text-green-600' : 'text-gray-400'}">
+                    <i class="fas fa-${data.running ? 'play-circle' : 'stop-circle'} text-2xl mr-2"></i>
+                    <div>
+                        <p class="font-semibold">${data.running ? 'Corriendo' : 'Detenido'}</p>
+                        <p class="text-sm text-gray-600">${data.nodes?.length || 0} nodos</p>
+                    </div>
+                </div>
+                <div class="flex items-center text-blue-600">
+                    <i class="fas fa-network-wired text-2xl mr-2"></i>
+                    <div>
+                        <p class="font-semibold">Interfaz</p>
+                        <p class="text-sm text-gray-600">${data.config?.monitored_interface || 'No configurada'}</p>
+                    </div>
+                </div>
+                <div class="flex items-center text-purple-600">
+                    <i class="fas fa-database text-2xl mr-2"></i>
+                    <div>
+                        <p class="font-semibold">Auto-Importación</p>
+                        <p class="text-sm text-gray-600">${data.config?.auto_import_enabled ? 'Activada' : 'Desactivada'}</p>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('zeek-status').innerHTML = statusHTML;
+
+            // Si no está instalado, mostrar botón de instalación
+            if (!data.installed) {
+                showNotification('Zeek no está instalado. Ve a la página de instalación.', 'warning');
+            }
+        } catch (error) {
+            console.error('Error checking Zeek status:', error);
+            showNotification('Error al verificar estado de Zeek', 'error');
+        }
+    }
+
+    async function loadStats() {
+        try {
+            const response = await fetch('/zeek/api/stats?hours_back=24');
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('total-connections').textContent = data.stats.total_connections.toLocaleString();
+                document.getElementById('total-dns').textContent = data.stats.total_dns_queries.toLocaleString();
+                document.getElementById('total-ssl').textContent = data.stats.total_ssl_connections.toLocaleString();
+                document.getElementById('total-notices').textContent = data.stats.total_notices.toLocaleString();
+                document.getElementById('unresolved-notices').textContent = data.stats.unresolved_notices.toLocaleString();
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+
+    async function loadPortScans() {
+        try {
+            const response = await fetch('/zeek/api/detections/port-scans?hours_back=24&min_ports=15');
+            const data = await response.json();
+
+            const container = document.getElementById('port-scans-list');
+
+            if (data.success && data.port_scanners.length > 0) {
+                const html = data.port_scanners.slice(0, 5).map(scanner => `
+                    <div class="p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-semibold text-gray-800">${scanner.ip}</p>
+                                <p class="text-sm text-gray-600">${scanner.ports_scanned} puertos | ${scanner.scan_rate} p/s</p>
+                            </div>
+                            <span class="px-2 py-1 text-xs font-semibold rounded ${
+                                scanner.severity === 'critical' ? 'bg-red-600 text-white' :
+                                scanner.severity === 'high' ? 'bg-orange-600 text-white' :
+                                'bg-yellow-600 text-white'
+                            }">${scanner.severity.toUpperCase()}</span>
+                        </div>
+                    </div>
+                `).join('');
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p class="text-gray-500 text-sm">No se detectaron port scans recientes</p>';
+            }
+        } catch (error) {
+            console.error('Error loading port scans:', error);
+        }
+    }
+
+    async function loadDNSAnalysis() {
+        try {
+            const response = await fetch('/zeek/api/detections/dns-analysis?hours_back=24');
+            const data = await response.json();
+
+            const container = document.getElementById('dns-tunneling-list');
+
+            if (data.success && data.analysis.tunneling_detected.length > 0) {
+                const html = data.analysis.tunneling_detected.slice(0, 5).map(tunnel => `
+                    <div class="p-3 bg-orange-50 border-l-4 border-orange-500 rounded">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-semibold text-gray-800">${tunnel.source_ip}</p>
+                                <p class="text-sm text-gray-600 truncate max-w-xs">${tunnel.domain}</p>
+                                <p class="text-xs text-gray-500">${tunnel.length} caracteres | Entropía: ${tunnel.entropy}</p>
+                            </div>
+                            <span class="px-2 py-1 text-xs font-semibold bg-orange-600 text-white rounded">TUNNELING</span>
+                        </div>
+                    </div>
+                `).join('');
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p class="text-gray-500 text-sm">No se detectó DNS tunneling reciente</p>';
+            }
+        } catch (error) {
+            console.error('Error loading DNS analysis:', error);
+        }
+    }
+
+    async function loadRecentNotices() {
+        try {
+            const response = await fetch('/zeek/api/logs/notices?limit=5&resolved=false');
+            const data = await response.json();
+
+            const container = document.getElementById('recent-notices');
+
+            if (data.success && data.notices.length > 0) {
+                const html = data.notices.map(notice => `
+                    <div class="p-3 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-semibold text-gray-800">${notice.note}</span>
+                            <span class="px-2 py-1 text-xs font-semibold rounded ${
+                                notice.severity === 'critical' ? 'bg-red-600 text-white' :
+                                notice.severity === 'high' ? 'bg-orange-600 text-white' :
+                                notice.severity === 'medium' ? 'bg-yellow-600 text-white' :
+                                'bg-blue-600 text-white'
+                            }">${notice.severity.toUpperCase()}</span>
+                        </div>
+                        <p class="text-sm text-gray-600">${notice.msg}</p>
+                        <p class="text-xs text-gray-500 mt-1">IP: ${notice.source_ip || 'N/A'}</p>
+                    </div>
+                `).join('');
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p class="text-gray-500 text-sm">No hay alertas recientes</p>';
+            }
+        } catch (error) {
+            console.error('Error loading notices:', error);
+        }
+    }
+
+    async function loadSSLAnalysis() {
+        try {
+            const response = await fetch('/zeek/api/detections/ssl-analysis?hours_back=24');
+            const data = await response.json();
+
+            const container = document.getElementById('ssl-suspicious-list');
+
+            if (data.success) {
+                const suspicious = [
+                    ...data.analysis.self_signed_certs.slice(0, 3).map(cert => ({...cert, type: 'Auto-firmado'})),
+                    ...data.analysis.expired_certs.slice(0, 2).map(cert => ({...cert, type: 'Expirado'}))
+                ];
+
+                if (suspicious.length > 0) {
+                    const html = suspicious.map(cert => `
+                        <div class="p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="font-semibold text-gray-800">${cert.server_name || cert.dest_ip}</span>
+                                <span class="px-2 py-1 text-xs font-semibold bg-red-600 text-white rounded">${cert.type}</span>
+                            </div>
+                            <p class="text-sm text-gray-600">IP: ${cert.source_ip} → ${cert.dest_ip}</p>
+                        </div>
+                    `).join('');
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<p class="text-gray-500 text-sm">No se detectaron certificados sospechosos</p>';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading SSL analysis:', error);
+        }
+    }
+
+    async function importLogs() {
+        if (!confirm('¿Importar logs de Zeek a la base de datos? Esto puede tomar unos minutos.')) {
+            return;
+        }
+
+        showNotification('Importando logs de Zeek...', 'info');
+
+        try {
+            const response = await fetch('/zeek/api/logs/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({log_type: 'all', limit: 10000})
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showNotification(`Importados ${data.total_imported} eventos`, 'success');
+                loadStats();
+                loadPortScans();
+                loadDNSAnalysis();
+                loadRecentNotices();
+                loadSSLAnalysis();
+            } else {
+                showNotification('Error al importar logs', 'error');
+            }
+        } catch (error) {
+            console.error('Error importing logs:', error);
+            showNotification('Error al importar logs', 'error');
+        }
+    }
+</script>
+{% endblock %}
