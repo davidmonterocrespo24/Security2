@@ -766,3 +766,37 @@ class ZeekAnalyzer:
             entropy -= probability * math.log2(probability)
 
         return round(entropy, 2)
+
+
+# ==================== FUNCIONES PARA TASK SCHEDULER ====================
+
+def import_zeek_logs(limit=1000):
+    """
+    Función wrapper para importar logs de Zeek desde el task scheduler
+
+    Args:
+        limit: Límite de registros a importar por archivo
+
+    Returns:
+        dict: Resultado de la importación
+    """
+    from database.db_manager import DatabaseManager
+
+    db = DatabaseManager()
+    analyzer = ZeekAnalyzer(db)
+
+    result = analyzer.import_zeek_logs_to_db(log_type='all', limit=limit)
+
+    return {
+        'success': result['success'],
+        'message': f"Importados {result['total_imported']} registros de Zeek",
+        'records_processed': result['total_imported'],
+        'records_created': result['total_imported'],
+        'connections_imported': result['imported'].get('conn', 0),
+        'dns_imported': result['imported'].get('dns', 0),
+        'http_imported': result['imported'].get('http', 0),
+        'ssl_imported': result['imported'].get('ssl', 0),
+        'files_imported': result['imported'].get('files', 0),
+        'notices_imported': result['imported'].get('notice', 0),
+        'errors': result['errors']
+    }

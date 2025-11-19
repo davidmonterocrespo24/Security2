@@ -959,3 +959,128 @@ def insert_default_config():
 
     session.commit()
     session.close()
+
+
+# ============================================================================
+# SISTEMA DE TAREAS PROGRAMADAS (CRON JOBS)
+# ============================================================================
+
+class ScheduledTask(Base):
+    """Tareas programadas (cron jobs) gestionadas desde el panel web"""
+    __tablename__ = 'scheduled_tasks'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Información básica
+    task_name = Column(String, unique=True, nullable=False, index=True)
+    description = Column(Text)
+
+    # Tipo de tarea
+    task_type = Column(String, nullable=False, index=True)  # 'zeek_import', 'ml_analysis', 'cleanup', 'custom'
+
+    # Función a ejecutar
+    module_name = Column(String, nullable=False)  # 'modules.zeek_analyzer'
+    function_name = Column(String, nullable=False)  # 'import_zeek_logs_to_db'
+    function_params = Column(Text)  # JSON con parámetros
+
+    # Programación (formato cron)
+    schedule_type = Column(String, nullable=False, default='interval')  # 'interval', 'cron', 'daily', 'hourly'
+    interval_minutes = Column(Integer)  # Para schedule_type='interval'
+    cron_expression = Column(String)  # Para schedule_type='cron' (ej: '0 */6 * * *')
+    hour = Column(Integer)  # Para schedule_type='daily' (0-23)
+    minute = Column(Integer, default=0)  # Minuto específico
+
+    # Estado
+    is_enabled = Column(Boolean, default=True, index=True)
+    is_running = Column(Boolean, default=False, index=True)
+
+    # Ejecución
+    last_run = Column(DateTime)
+    last_run_status = Column(String)  # 'success', 'error', 'running'
+    last_run_message = Column(Text)
+    last_run_duration = Column(Float)  # Segundos
+
+    next_run = Column(DateTime, index=True)
+
+    # Estadísticas
+    total_runs = Column(Integer, default=0)
+    successful_runs = Column(Integer, default=0)
+    failed_runs = Column(Integer, default=0)
+
+    # Configuración avanzada
+    timeout_seconds = Column(Integer, default=300)  # Timeout de ejecución
+    retry_on_failure = Column(Boolean, default=False)
+    max_retries = Column(Integer, default=3)
+
+    # Alertas
+    alert_on_failure = Column(Boolean, default=True)
+    alert_email = Column(String)
+
+    # Auditoría
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String)
+    updated_at = Column(DateTime)
+    updated_by = Column(String)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'task_name': self.task_name,
+            'description': self.description,
+            'task_type': self.task_type,
+            'module_name': self.module_name,
+            'function_name': self.function_name,
+            'schedule_type': self.schedule_type,
+            'interval_minutes': self.interval_minutes,
+            'cron_expression': self.cron_expression,
+            'hour': self.hour,
+            'minute': self.minute,
+            'is_enabled': self.is_enabled,
+            'is_running': self.is_running,
+            'last_run': self.last_run.isoformat() if self.last_run else None,
+            'last_run_status': self.last_run_status,
+            'last_run_message': self.last_run_message,
+            'next_run': self.next_run.isoformat() if self.next_run else None,
+            'total_runs': self.total_runs,
+            'successful_runs': self.successful_runs,
+            'failed_runs': self.failed_runs
+        }
+
+
+class TaskLog(Base):
+    """Historial de ejecución de tareas programadas"""
+    __tablename__ = 'task_logs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_id = Column(Integer, ForeignKey('scheduled_tasks.id'), nullable=False, index=True)
+
+    # Ejecución
+    started_at = Column(DateTime, nullable=False, index=True)
+    finished_at = Column(DateTime)
+    duration = Column(Float)  # Segundos
+
+    # Resultado
+    status = Column(String, nullable=False, index=True)  # 'success', 'error', 'timeout'
+    message = Column(Text)
+    error_details = Column(Text)  # Stacktrace si hubo error
+
+    # Output de la tarea
+    output = Column(Text)  # JSON con resultados
+
+    # Métricas
+    records_processed = Column(Integer)
+    records_created = Column(Integer)
+    records_updated = Column(Integer)
+    records_deleted = Column(Integer)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'task_id': self.task_id,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'finished_at': self.finished_at.isoformat() if self.finished_at else None,
+            'duration': self.duration,
+            'status': self.status,
+            'message': self.message,
+            'records_processed': self.records_processed
+        }
