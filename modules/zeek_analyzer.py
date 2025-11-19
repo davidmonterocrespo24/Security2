@@ -334,7 +334,12 @@ class ZeekLogParser:
             if isinstance(ts, (int, float)):
                 return datetime.fromtimestamp(ts)
             elif isinstance(ts, str):
-                return datetime.fromisoformat(ts)
+                # Intentar como timestamp Unix primero
+                try:
+                    return datetime.fromtimestamp(float(ts))
+                except:
+                    # Si falla, intentar como ISO format
+                    return datetime.fromisoformat(ts)
             else:
                 return None
         except:
