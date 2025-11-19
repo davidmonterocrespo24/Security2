@@ -93,6 +93,52 @@ class MLTrafficDetector:
             # 8. Características de geo-localización (si están disponibles)
             features['country'] = event.get('country', 'unknown')
 
+            # 9. NUEVO: Características de Zeek (análisis de red profundo)
+            try:
+                from modules.zeek_ml_integration import ZeekMLIntegration
+                zeek_integration = ZeekMLIntegration(self.db)
+                zeek_features = zeek_integration.extract_zeek_features_for_ip(ip, hours_back=24)
+
+                # Agregar las 18 características de Zeek
+                features['zeek_connections_count'] = zeek_features['zeek_connections_count']
+                features['zeek_unique_dest_ports'] = zeek_features['zeek_unique_dest_ports']
+                features['zeek_unique_dest_ips'] = zeek_features['zeek_unique_dest_ips']
+                features['zeek_bytes_sent'] = zeek_features['zeek_bytes_sent']
+                features['zeek_bytes_received'] = zeek_features['zeek_bytes_received']
+                features['zeek_packets_sent'] = zeek_features['zeek_packets_sent']
+                features['zeek_packets_received'] = zeek_features['zeek_packets_received']
+                features['zeek_avg_duration'] = zeek_features['zeek_avg_duration']
+                features['zeek_failed_connections'] = zeek_features['zeek_failed_connections']
+                features['zeek_dns_queries'] = zeek_features['zeek_dns_queries']
+                features['zeek_unique_domains'] = zeek_features['zeek_unique_domains']
+                features['zeek_failed_dns'] = zeek_features['zeek_failed_dns']
+                features['zeek_http_requests'] = zeek_features['zeek_http_requests']
+                features['zeek_http_methods_diversity'] = zeek_features['zeek_http_methods_diversity']
+                features['zeek_suspicious_user_agents'] = zeek_features['zeek_suspicious_user_agents']
+                features['zeek_ssl_connections'] = zeek_features['zeek_ssl_connections']
+                features['zeek_ssl_invalid_certs'] = zeek_features['zeek_ssl_invalid_certs']
+                features['zeek_connection_regularity'] = zeek_features['zeek_connection_regularity']
+            except Exception as e:
+                # Si falla la integración de Zeek, usar valores por defecto (ceros)
+                features['zeek_connections_count'] = 0
+                features['zeek_unique_dest_ports'] = 0
+                features['zeek_unique_dest_ips'] = 0
+                features['zeek_bytes_sent'] = 0
+                features['zeek_bytes_received'] = 0
+                features['zeek_packets_sent'] = 0
+                features['zeek_packets_received'] = 0
+                features['zeek_avg_duration'] = 0.0
+                features['zeek_failed_connections'] = 0
+                features['zeek_dns_queries'] = 0
+                features['zeek_unique_domains'] = 0
+                features['zeek_failed_dns'] = 0
+                features['zeek_http_requests'] = 0
+                features['zeek_http_methods_diversity'] = 0
+                features['zeek_suspicious_user_agents'] = 0
+                features['zeek_ssl_connections'] = 0
+                features['zeek_ssl_invalid_certs'] = 0
+                features['zeek_connection_regularity'] = 0.0
+
             features_list.append(features)
 
         return pd.DataFrame(features_list)
