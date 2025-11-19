@@ -64,7 +64,7 @@ init_database()
 config_manager = ConfigManager()
 db_manager = DatabaseManager()
 firewall_manager = FirewallManager()
-fail2ban_manager = Fail2banManager()
+fail2ban_manager = Fail2banManager(db_manager)
 port_scanner = PortScanner()
 bot_detector = BotDetector()
 installer = SystemInstaller()
@@ -105,6 +105,15 @@ task_scheduler = TaskScheduler(db_manager)
 from routes.task_routes import create_task_blueprint
 task_blueprint = create_task_blueprint(task_scheduler)
 app.register_blueprint(task_blueprint)
+
+# Inicializar sistema de alertas
+from modules.alert_manager import AlertManager
+alert_manager = AlertManager(db_manager)
+
+# Registrar blueprint de alertas
+from routes.alert_routes import create_alert_blueprint
+alert_blueprint = create_alert_blueprint(db_manager, alert_manager)
+app.register_blueprint(alert_blueprint)
 
 # Iniciar worker de tareas en background
 task_scheduler.start_worker()

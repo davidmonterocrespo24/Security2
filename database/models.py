@@ -912,6 +912,210 @@ class ZeekStats(Base):
         }
 
 
+# ============================================================================
+# SISTEMA DE ALERTAS Y NOTIFICACIONES
+# ============================================================================
+
+class AlertChannel(Base):
+    """Canales de notificación (Email, Telegram, Slack, Discord, Webhook)"""
+    __tablename__ = 'alert_channels'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Información básica
+    channel_name = Column(String, unique=True, nullable=False, index=True)
+    channel_type = Column(String, nullable=False, index=True)  # 'email', 'telegram', 'slack', 'discord', 'webhook'
+    description = Column(Text)
+
+    # Configuración (JSON)
+    # Para email: {'smtp_server': '...', 'smtp_port': 587, 'smtp_user': '...', 'recipients': ['...']}
+    # Para telegram: {'bot_token': '...', 'chat_id': '...'}
+    # Para slack: {'webhook_url': '...'}
+    # Para webhook: {'url': '...', 'method': 'POST', 'headers': {...}}
+    config = Column(Text, nullable=False)  # JSON
+
+    # Estado
+    is_enabled = Column(Boolean, default=True, index=True)
+    is_verified = Column(Boolean, default=False)  # Verificado con mensaje de prueba
+    last_test_at = Column(DateTime)
+    last_test_success = Column(Boolean)
+
+    # Estadísticas
+    total_alerts_sent = Column(Integer, default=0)
+    successful_sends = Column(Integer, default=0)
+    failed_sends = Column(Integer, default=0)
+    last_alert_sent_at = Column(DateTime)
+
+    # Auditoría
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String)
+    updated_at = Column(DateTime)
+    updated_by = Column(String)
+
+    def to_dict(self):
+        # Parse config sin exponer credenciales sensibles
+        config_dict = {}
+        if self.config:
+            try:
+                config_dict = json.loads(self.config)
+                # Ocultar credenciales
+                if 'smtp_password' in config_dict:
+                    config_dict['smtp_password'] = '***'
+                if 'bot_token' in config_dict:
+                    config_dict['bot_token'] = config_dict['bot_token'][:10] + '***'
+            except:
+                pass
+
+        return {
+            'id': self.id,
+            'channel_name': self.channel_name,
+            'channel_type': self.channel_type,
+            'description': self.description,
+            'config': config_dict,
+            'is_enabled': self.is_enabled,
+            'is_verified': self.is_verified,
+            'total_alerts_sent': self.total_alerts_sent,
+            'successful_sends': self.successful_sends,
+            'failed_sends': self.failed_sends,
+            'last_alert_sent_at': self.last_alert_sent_at.isoformat() if self.last_alert_sent_at else None
+        }
+
+
+class AlertRule(Base):
+    """Reglas para disparar alertas automáticamente"""
+    __tablename__ = 'alert_rules'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Información básica
+    rule_name = Column(String, unique=True, nullable=False, index=True)
+    description = Column(Text)
+
+    # Tipo de regla
+    rule_type = Column(String, nullable=False, index=True)  # 'ml_prediction', 'zeek_detection', 'fail2ban_ban', 'custom'
+
+    # Condiciones (JSON)
+    # Ejemplos:
+    # {'ml_confidence': {'operator': '>', 'value': 0.8}}
+    # {'zeek_detection_type': {'operator': 'in', 'value': ['port_scan', 'dns_tunneling']}}
+    # {'severity': {'operator': '==', 'value': 'CRITICAL'}}
+    conditions = Column(Text, nullable=False)  # JSON
+
+    # Umbral de severidad mínimo
+    severity_threshold = Column(String, index=True)  # 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
+
+    # Canales a utilizar (IDs de AlertChannel)
+    channel_ids = Column(Text)  # JSON list de IDs
+
+    # Configuración de envío
+    is_enabled = Column(Boolean, default=True, index=True)
+    cooldown_minutes = Column(Integer, default=0)  # Tiempo mínimo entre alertas del mismo tipo
+    last_triggered_at = Column(DateTime)
+
+    # Plantilla de mensaje
+    message_template = Column(Text)  # Jinja2 template (opcional)
+    subject_template = Column(String)  # Para emails
+
+    # Estadísticas
+    total_triggers = Column(Integer, default=0)
+    total_alerts_sent = Column(Integer, default=0)
+    last_error = Column(Text)
+
+    # Auditoría
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String)
+    updated_at = Column(DateTime)
+    updated_by = Column(String)
+
+    def to_dict(self):
+        # Parse JSON fields
+        conditions_dict = {}
+        channel_ids_list = []
+
+        if self.conditions:
+            try:
+                conditions_dict = json.loads(self.conditions)
+            except:
+                pass
+
+        if self.channel_ids:
+            try:
+                channel_ids_list = json.loads(self.channel_ids)
+            except:
+                pass
+
+        return {
+            'id': self.id,
+            'rule_name': self.rule_name,
+            'description': self.description,
+            'rule_type': self.rule_type,
+            'conditions': conditions_dict,
+            'severity_threshold': self.severity_threshold,
+            'channel_ids': channel_ids_list,
+            'is_enabled': self.is_enabled,
+            'cooldown_minutes': self.cooldown_minutes,
+            'last_triggered_at': self.last_triggered_at.isoformat() if self.last_triggered_at else None,
+            'total_triggers': self.total_triggers,
+            'total_alerts_sent': self.total_alerts_sent
+        }
+
+
+class AlertLog(Base):
+    """Historial de alertas enviadas"""
+    __tablename__ = 'alert_logs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Relaciones
+    rule_id = Column(Integer, ForeignKey('alert_rules.id'), index=True)
+    channel_id = Column(Integer, ForeignKey('alert_channels.id'), index=True)
+
+    # Información de la alerta
+    severity = Column(String, nullable=False, index=True)
+    subject = Column(String)
+    message = Column(Text, nullable=False)
+
+    # Evento que disparó la alerta (JSON)
+    # Contiene toda la información del evento (IP, tipo, score, etc)
+    event_metadata = Column(Text)  # JSON
+
+    # Envío
+    sent_at = Column(DateTime, default=datetime.utcnow, index=True)
+    success = Column(Boolean, default=False, index=True)
+    error_message = Column(Text)
+
+    # Respuesta (para webhooks)
+    response_code = Column(Integer)
+    response_body = Column(Text)
+
+    # Tiempo de envío
+    send_duration_ms = Column(Integer)  # Milisegundos
+
+    def to_dict(self):
+        # Parse metadata
+        metadata_dict = {}
+        if self.event_metadata:
+            try:
+                metadata_dict = json.loads(self.event_metadata)
+            except:
+                pass
+
+        return {
+            'id': self.id,
+            'rule_id': self.rule_id,
+            'channel_id': self.channel_id,
+            'severity': self.severity,
+            'subject': self.subject,
+            'message': self.message,
+            'event_metadata': metadata_dict,
+            'sent_at': self.sent_at.isoformat() if self.sent_at else None,
+            'success': self.success,
+            'error_message': self.error_message,
+            'response_code': self.response_code,
+            'send_duration_ms': self.send_duration_ms
+        }
+
+
 # Función para inicializar la base de datos
 def init_database():
     """Crear todas las tablas si no existen"""

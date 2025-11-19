@@ -4,12 +4,22 @@ Gestor de Fail2ban
 import subprocess
 import re
 import os
+from datetime import datetime
 
 
 class Fail2banManager:
-    def __init__(self):
+    def __init__(self, db_manager=None):
         self.fail2ban_available = self._check_fail2ban_available()
         self.fail2ban_client = 'fail2ban-client'
+
+        # Inicializar sistema de alertas
+        self.alert_manager = None
+        if db_manager:
+            try:
+                from modules.alert_manager import AlertManager
+                self.alert_manager = AlertManager(db_manager)
+            except Exception as e:
+                print(f"Advertencia: No se pudo inicializar AlertManager: {e}")
 
     def _check_fail2ban_available(self):
         """Verificar si Fail2ban está disponible"""
@@ -211,6 +221,22 @@ class Fail2banManager:
 
         command = f'sudo {self.fail2ban_client} set {jail} banip {ip}'
         result = self._run_command(command)
+
+        # DISPARAR ALERTA si el ban fue exitoso
+        if result['success'] and self.alert_manager:
+            try:
+                self.alert_manager.process_alert({
+                    'type': 'fail2ban_action',
+                    'action': 'manual_ban',
+                    'severity': 'HIGH',
+                    'ip': ip,
+                    'jail': jail,
+                    'reason': f"IP {ip} bloqueada manualmente en jail {jail}",
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+            except Exception as e:
+                print(f"Error disparando alerta de Fail2ban ban: {e}")
+
         return result
 
     def unban_ip(self, ip, jail='sshd'):
@@ -463,3 +489,89 @@ action = %(action_mwl)s
             pass
 
         return None
+
+    def monitor_and_alert_bans(self, limit=50):
+        """
+        Monitorear bloqueos recientes de Fail2ban y disparar alertas
+        Esta función se puede ejecutar periódicamente desde el task scheduler
+
+        Args:
+            limit: Número de bloqueos recientes a revisar
+
+        Returns:
+            dict: Resumen de alertas disparadas
+        """
+        if not self.alert_manager:
+            return {'success': False, 'message': 'AlertManager no inicializado'}
+
+        blocks = self.get_recent_blocks(limit=limit)
+        alerts_sent = 0
+
+        # Mantener registro de IPs ya alertadas para evitar spam
+        # (en producción esto debería usar una base de datos o caché)
+        alerted_ips = set()
+
+        for block in blocks:
+            ip = block['ip']
+            jail = block['jail']
+
+            # Evitar alertas duplicadas en la misma ejecución
+            if ip in alerted_ips:
+                continue
+
+            # Determinar severidad según jail
+            severity = 'MEDIUM'
+            if jail in ['sshd', 'ssh']:
+                severity = 'HIGH'
+            elif 'nginx' in jail or 'http' in jail:
+                severity = 'MEDIUM'
+
+            # Disparar alerta
+            try:
+                self.alert_manager.process_alert({
+                    'type': 'fail2ban_ban',
+                    'severity': severity,
+                    'ip': ip,
+                    'jail': jail,
+                    'timestamp': block.get('timestamp', datetime.utcnow().isoformat()),
+                    'reason': f"IP {ip} bloqueada por Fail2ban en jail {jail}"
+                })
+                alerts_sent += 1
+                alerted_ips.add(ip)
+            except Exception as e:
+                print(f"Error disparando alerta de Fail2ban para {ip}: {e}")
+
+        return {
+            'success': True,
+            'message': f'Monitoreados {len(blocks)} bloqueos, {alerts_sent} alertas enviadas',
+            'blocks_found': len(blocks),
+            'alerts_sent': alerts_sent
+        }
+
+
+# === FUNCIÓN PARA TASK SCHEDULER ===
+
+def fail2ban_monitor_and_alert(limit=50):
+    """
+    Función wrapper para ejecutar desde task scheduler
+    Monitorea bloqueos de Fail2ban y dispara alertas
+
+    Args:
+        limit: Número de bloqueos recientes a revisar
+
+    Returns:
+        dict: Resumen de la operación
+    """
+    from database.db_manager import DatabaseManager
+
+    db = DatabaseManager()
+    f2b_manager = Fail2banManager(db_manager=db)
+
+    result = f2b_manager.monitor_and_alert_bans(limit=limit)
+
+    return {
+        'success': result['success'],
+        'message': result['message'],
+        'records_processed': result.get('blocks_found', 0),
+        'records_created': result.get('alerts_sent', 0)
+    }

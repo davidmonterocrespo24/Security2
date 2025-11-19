@@ -1,0 +1,679 @@
+{% extends "base.html" %}
+{% block title %}Configuracion de Alertas{% endblock %}
+{% block header %}Configuracion de Alertas{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Estadisticas -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Alertas Enviadas (24h)</p>
+                    <p id="stat-total" class="text-2xl font-bold">0</p>
+                </div>
+                <i class="fas fa-bell text-blue-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Exitosas</p>
+                    <p id="stat-success" class="text-2xl font-bold text-green-600">0</p>
+                </div>
+                <i class="fas fa-check-circle text-green-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Canales Activos</p>
+                    <p id="stat-channels" class="text-2xl font-bold text-purple-600">0</p>
+                </div>
+                <i class="fas fa-satellite-dish text-purple-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Reglas Activas</p>
+                    <p id="stat-rules" class="text-2xl font-bold text-orange-600">0</p>
+                </div>
+                <i class="fas fa-filter text-orange-500 text-3xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="border-b border-gray-200">
+            <nav class="flex -mb-px">
+                <button onclick="switchTab('channels')" id="tab-channels" class="tab-button active px-6 py-3 border-b-2 border-blue-500 text-blue-600 font-medium">
+                    <i class="fas fa-satellite-dish mr-2"></i>Canales
+                </button>
+                <button onclick="switchTab('rules')" id="tab-rules" class="tab-button px-6 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-filter mr-2"></i>Reglas
+                </button>
+                <button onclick="switchTab('logs')" id="tab-logs" class="tab-button px-6 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-history mr-2"></i>Historial
+                </button>
+            </nav>
+        </div>
+
+        <!-- Tab: Canales -->
+        <div id="content-channels" class="tab-content p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Canales de Notificacion</h3>
+                <button onclick="showAddChannelModal()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    <i class="fas fa-plus mr-2"></i>Nuevo Canal
+                </button>
+            </div>
+            <div id="channels-list" class="space-y-3"></div>
+        </div>
+
+        <!-- Tab: Reglas -->
+        <div id="content-rules" class="tab-content hidden p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Reglas de Alerta</h3>
+                <button onclick="showAddRuleModal()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    <i class="fas fa-plus mr-2"></i>Nueva Regla
+                </button>
+            </div>
+            <div id="rules-list" class="space-y-3"></div>
+        </div>
+
+        <!-- Tab: Historial -->
+        <div id="content-logs" class="tab-content hidden p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Historial de Alertas (ultimas 24h)</h3>
+                <div class="flex space-x-2">
+                    <select id="filter-severity" onchange="loadLogs()" class="px-3 py-2 border rounded">
+                        <option value="">Todas las severidades</option>
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="HIGH">High</option>
+                        <option value="CRITICAL">Critical</option>
+                    </select>
+                    <button onclick="loadLogs()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                        <i class="fas fa-sync mr-2"></i>Actualizar
+                    </button>
+                </div>
+            </div>
+            <div id="logs-list" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- Prueba de Alerta -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold mb-4"><i class="fas fa-vial mr-2 text-green-600"></i>Probar Sistema de Alertas</h3>
+        <div class="flex space-x-4 items-end">
+            <div class="flex-1">
+                <label class="block text-sm font-medium mb-2">Mensaje de Prueba</label>
+                <input type="text" id="test-message" placeholder="Alerta de prueba del sistema" class="w-full px-4 py-2 border rounded">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Severidad</label>
+                <select id="test-severity" class="px-4 py-2 border rounded">
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="CRITICAL">Critical</option>
+                </select>
+            </div>
+            <button onclick="sendTestAlert()" class="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                <i class="fas fa-paper-plane mr-2"></i>Enviar Prueba
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Agregar/Editar Canal -->
+<div id="channelModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+        <h3 class="text-xl font-semibold mb-4" id="channel-modal-title">Nuevo Canal</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-2">Nombre del Canal</label>
+                <input type="text" id="channel-name" class="w-full px-4 py-2 border rounded" placeholder="Ej: Email Administradores">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Tipo</label>
+                <select id="channel-type" class="w-full px-4 py-2 border rounded" onchange="updateChannelConfig()">
+                    <option value="email">Email (SMTP)</option>
+                </select>
+            </div>
+            <div id="channel-config-email">
+                <label class="block text-sm font-medium mb-2">Destinatarios (separados por coma)</label>
+                <input type="text" id="channel-recipients" class="w-full px-4 py-2 border rounded" placeholder="admin@example.com, security@example.com">
+                <p class="text-sm text-gray-500 mt-1">La configuracion SMTP se lee del archivo .env</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Descripcion (opcional)</label>
+                <textarea id="channel-description" class="w-full px-4 py-2 border rounded" rows="2"></textarea>
+            </div>
+            <div class="flex items-center">
+                <input type="checkbox" id="channel-enabled" checked class="mr-2">
+                <label class="text-sm font-medium">Canal habilitado</label>
+            </div>
+        </div>
+        <div class="flex justify-end space-x-3 mt-6">
+            <button onclick="closeChannelModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Cancelar</button>
+            <button onclick="saveChannel()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Agregar/Editar Regla -->
+<div id="ruleModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 max-h-screen overflow-y-auto">
+        <h3 class="text-xl font-semibold mb-4" id="rule-modal-title">Nueva Regla</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-2">Nombre de la Regla</label>
+                <input type="text" id="rule-name" class="w-full px-4 py-2 border rounded" placeholder="Ej: Alerta ML Alta Confianza">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Tipo de Evento</label>
+                    <select id="rule-type" class="w-full px-4 py-2 border rounded">
+                        <option value="ml_prediction">ML Prediction</option>
+                        <option value="zeek_detection">Zeek Detection</option>
+                        <option value="fail2ban_ban">Fail2ban Ban</option>
+                        <option value="manual_test">Manual Test</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Severidad Minima</label>
+                    <select id="rule-severity" class="w-full px-4 py-2 border rounded">
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="HIGH">High</option>
+                        <option value="CRITICAL">Critical</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Canales de Notificacion</label>
+                <div id="rule-channels-select" class="space-y-2 border rounded p-3 max-h-32 overflow-y-auto"></div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Cooldown (minutos)</label>
+                <input type="number" id="rule-cooldown" class="w-full px-4 py-2 border rounded" value="0" min="0">
+                <p class="text-sm text-gray-500 mt-1">Tiempo minimo entre alertas del mismo tipo (0 = sin limite)</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Descripcion (opcional)</label>
+                <textarea id="rule-description" class="w-full px-4 py-2 border rounded" rows="2"></textarea>
+            </div>
+            <div class="flex items-center">
+                <input type="checkbox" id="rule-enabled" checked class="mr-2">
+                <label class="text-sm font-medium">Regla habilitada</label>
+            </div>
+        </div>
+        <div class="flex justify-end space-x-3 mt-6">
+            <button onclick="closeRuleModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Cancelar</button>
+            <button onclick="saveRule()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentChannelId = null;
+let currentRuleId = null;
+let allChannels = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadStats();
+    loadChannels();
+    loadRules();
+    loadLogs();
+    setInterval(() => loadStats(), 30000); // Actualizar stats cada 30s
+});
+
+// === TABS ===
+function switchTab(tab) {
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-gray-500');
+    });
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+
+    document.getElementById(`tab-${tab}`).classList.add('active', 'border-blue-500', 'text-blue-600');
+    document.getElementById(`content-${tab}`).classList.remove('hidden');
+
+    if (tab === 'logs') loadLogs();
+}
+
+// === ESTADISTICAS ===
+async function loadStats() {
+    try {
+        const res = await fetch('/alerts/api/logs/stats');
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('stat-total').textContent = data.stats.total_sent;
+            document.getElementById('stat-success').textContent = data.stats.successful;
+            document.getElementById('stat-channels').textContent = data.stats.active_channels;
+            document.getElementById('stat-rules').textContent = data.stats.active_rules;
+        }
+    } catch (e) {
+        console.error('Error loading stats:', e);
+    }
+}
+
+// === CANALES ===
+async function loadChannels() {
+    try {
+        const res = await fetch('/alerts/api/channels');
+        const data = await res.json();
+        allChannels = data.channels || [];
+        const list = document.getElementById('channels-list');
+
+        if (allChannels.length === 0) {
+            list.innerHTML = '<p class="text-gray-500 text-center py-8">No hay canales configurados. Agrega uno para comenzar.</p>';
+            return;
+        }
+
+        list.innerHTML = allChannels.map(c => `
+            <div class="border rounded-lg p-4 flex items-center justify-between hover:bg-gray-50">
+                <div class="flex items-center space-x-4">
+                    <i class="fas ${c.channel_type === 'email' ? 'fa-envelope' : 'fa-bell'} text-2xl ${c.is_enabled ? 'text-blue-500' : 'text-gray-400'}"></i>
+                    <div>
+                        <h4 class="font-semibold">${c.channel_name}</h4>
+                        <p class="text-sm text-gray-500">${c.channel_type.toUpperCase()} ${c.is_verified ? '<span class="text-green-600">✓ Verificado</span>' : '<span class="text-yellow-600">No verificado</span>'}</p>
+                        <p class="text-xs text-gray-400">Enviadas: ${c.total_alerts_sent} | Exitosas: ${c.successful_sends} | Fallidas: ${c.failed_sends}</p>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="testChannel(${c.id})" class="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm" title="Enviar prueba">
+                        <i class="fas fa-vial"></i>
+                    </button>
+                    <button onclick="toggleChannel(${c.id})" class="px-3 py-1 ${c.is_enabled ? 'bg-yellow-600' : 'bg-green-600'} text-white rounded hover:opacity-80 text-sm" title="${c.is_enabled ? 'Deshabilitar' : 'Habilitar'}">
+                        <i class="fas ${c.is_enabled ? 'fa-pause' : 'fa-play'}"></i>
+                    </button>
+                    <button onclick="editChannel(${c.id})" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteChannel(${c.id})" class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Error loading channels:', e);
+        showNotification('Error al cargar canales', 'error');
+    }
+}
+
+function showAddChannelModal() {
+    currentChannelId = null;
+    document.getElementById('channel-modal-title').textContent = 'Nuevo Canal';
+    document.getElementById('channel-name').value = '';
+    document.getElementById('channel-recipients').value = '';
+    document.getElementById('channel-description').value = '';
+    document.getElementById('channel-enabled').checked = true;
+    document.getElementById('channelModal').classList.remove('hidden');
+}
+
+function closeChannelModal() {
+    document.getElementById('channelModal').classList.add('hidden');
+}
+
+async function editChannel(id) {
+    try {
+        const res = await fetch(`/alerts/api/channels/${id}`);
+        const data = await res.json();
+        if (data.success) {
+            currentChannelId = id;
+            document.getElementById('channel-modal-title').textContent = 'Editar Canal';
+            document.getElementById('channel-name').value = data.channel.channel_name;
+            const config = JSON.parse(data.channel.config);
+            document.getElementById('channel-recipients').value = (config.recipients || []).join(', ');
+            document.getElementById('channel-description').value = data.channel.description || '';
+            document.getElementById('channel-enabled').checked = data.channel.is_enabled;
+            document.getElementById('channelModal').classList.remove('hidden');
+        }
+    } catch (e) {
+        showNotification('Error al cargar canal', 'error');
+    }
+}
+
+async function saveChannel() {
+    const name = document.getElementById('channel-name').value.trim();
+    const recipients = document.getElementById('channel-recipients').value.split(',').map(r => r.trim()).filter(r => r);
+    const description = document.getElementById('channel-description').value.trim();
+    const enabled = document.getElementById('channel-enabled').checked;
+
+    if (!name || recipients.length === 0) {
+        showNotification('Nombre y destinatarios son requeridos', 'error');
+        return;
+    }
+
+    const channelData = {
+        channel_name: name,
+        channel_type: 'email',
+        config: { recipients },
+        description,
+        is_enabled: enabled
+    };
+
+    try {
+        const url = currentChannelId ? `/alerts/api/channels/${currentChannelId}` : '/alerts/api/channels';
+        const method = currentChannelId ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+            method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(channelData)
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            showNotification(data.message, 'success');
+            closeChannelModal();
+            loadChannels();
+        } else {
+            showNotification(data.error, 'error');
+        }
+    } catch (e) {
+        showNotification('Error al guardar canal', 'error');
+    }
+}
+
+async function deleteChannel(id) {
+    if (!confirm('¿Estas seguro de eliminar este canal?')) return;
+
+    try {
+        const res = await fetch(`/alerts/api/channels/${id}`, {method: 'DELETE'});
+        const data = await res.json();
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadChannels();
+        } else {
+            showNotification(data.error, 'error');
+        }
+    } catch (e) {
+        showNotification('Error al eliminar canal', 'error');
+    }
+}
+
+async function toggleChannel(id) {
+    try {
+        const res = await fetch(`/alerts/api/channels/${id}/toggle`, {method: 'POST'});
+        const data = await res.json();
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadChannels();
+        }
+    } catch (e) {
+        showNotification('Error al cambiar estado', 'error');
+    }
+}
+
+async function testChannel(id) {
+    if (!confirm('¿Enviar email de prueba a este canal?')) return;
+
+    try {
+        const res = await fetch(`/alerts/api/channels/${id}/test`, {method: 'POST'});
+        const data = await res.json();
+        if (data.success) {
+            showNotification('Email de prueba enviado exitosamente', 'success');
+            loadChannels();
+        } else {
+            showNotification(`Error: ${data.error}`, 'error');
+        }
+    } catch (e) {
+        showNotification('Error al enviar prueba', 'error');
+    }
+}
+
+// === REGLAS ===
+async function loadRules() {
+    try {
+        const res = await fetch('/alerts/api/rules');
+        const data = await res.json();
+        const rules = data.rules || [];
+        const list = document.getElementById('rules-list');
+
+        if (rules.length === 0) {
+            list.innerHTML = '<p class="text-gray-500 text-center py-8">No hay reglas configuradas. Agrega una para comenzar.</p>';
+            return;
+        }
+
+        const severityColors = {LOW: 'gray', MEDIUM: 'yellow', HIGH: 'orange', CRITICAL: 'red'};
+        list.innerHTML = rules.map(r => `
+            <div class="border rounded-lg p-4 flex items-center justify-between hover:bg-gray-50">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-3">
+                        <h4 class="font-semibold">${r.rule_name}</h4>
+                        <span class="px-2 py-1 text-xs rounded bg-${severityColors[r.severity_threshold]}-100 text-${severityColors[r.severity_threshold]}-800">${r.severity_threshold}</span>
+                        ${r.is_enabled ? '<span class="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Activa</span>' : '<span class="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Inactiva</span>'}
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">${r.rule_type} ${r.cooldown_minutes > 0 ? `| Cooldown: ${r.cooldown_minutes}min` : ''}</p>
+                    <p class="text-xs text-gray-400">Disparada: ${r.times_triggered} veces | Ultima: ${r.last_triggered_at || 'Nunca'}</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="toggleRule(${r.id})" class="px-3 py-1 ${r.is_enabled ? 'bg-yellow-600' : 'bg-green-600'} text-white rounded hover:opacity-80 text-sm">
+                        <i class="fas ${r.is_enabled ? 'fa-pause' : 'fa-play'}"></i>
+                    </button>
+                    <button onclick="editRule(${r.id})" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteRule(${r.id})" class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Error loading rules:', e);
+        showNotification('Error al cargar reglas', 'error');
+    }
+}
+
+async function showAddRuleModal() {
+    currentRuleId = null;
+    document.getElementById('rule-modal-title').textContent = 'Nueva Regla';
+    document.getElementById('rule-name').value = '';
+    document.getElementById('rule-type').value = 'ml_prediction';
+    document.getElementById('rule-severity').value = 'MEDIUM';
+    document.getElementById('rule-cooldown').value = '0';
+    document.getElementById('rule-description').value = '';
+    document.getElementById('rule-enabled').checked = true;
+
+    await loadChannelsForRule();
+    document.getElementById('ruleModal').classList.remove('hidden');
+}
+
+async function loadChannelsForRule() {
+    const container = document.getElementById('rule-channels-select');
+    if (allChannels.length === 0) {
+        await loadChannels();
+    }
+
+    container.innerHTML = allChannels.filter(c => c.is_enabled).map(c => `
+        <label class="flex items-center">
+            <input type="checkbox" class="rule-channel-checkbox mr-2" value="${c.id}">
+            <span>${c.channel_name} (${c.channel_type})</span>
+        </label>
+    `).join('') || '<p class="text-gray-500 text-sm">No hay canales habilitados</p>';
+}
+
+function closeRuleModal() {
+    document.getElementById('ruleModal').classList.add('hidden');
+}
+
+async function editRule(id) {
+    try {
+        const res = await fetch(`/alerts/api/rules/${id}`);
+        const data = await res.json();
+        if (data.success) {
+            currentRuleId = id;
+            document.getElementById('rule-modal-title').textContent = 'Editar Regla';
+            document.getElementById('rule-name').value = data.rule.rule_name;
+            document.getElementById('rule-type').value = data.rule.rule_type;
+            document.getElementById('rule-severity').value = data.rule.severity_threshold;
+            document.getElementById('rule-cooldown').value = data.rule.cooldown_minutes;
+            document.getElementById('rule-description').value = data.rule.description || '';
+            document.getElementById('rule-enabled').checked = data.rule.is_enabled;
+
+            await loadChannelsForRule();
+            const channelIds = JSON.parse(data.rule.channel_ids || '[]');
+            channelIds.forEach(cid => {
+                const checkbox = document.querySelector(`.rule-channel-checkbox[value="${cid}"]`);
+                if (checkbox) checkbox.checked = true;
+            });
+
+            document.getElementById('ruleModal').classList.remove('hidden');
+        }
+    } catch (e) {
+        showNotification('Error al cargar regla', 'error');
+    }
+}
+
+async function saveRule() {
+    const name = document.getElementById('rule-name').value.trim();
+    const type = document.getElementById('rule-type').value;
+    const severity = document.getElementById('rule-severity').value;
+    const cooldown = parseInt(document.getElementById('rule-cooldown').value);
+    const description = document.getElementById('rule-description').value.trim();
+    const enabled = document.getElementById('rule-enabled').checked;
+
+    const selectedChannels = Array.from(document.querySelectorAll('.rule-channel-checkbox:checked')).map(cb => parseInt(cb.value));
+
+    if (!name || selectedChannels.length === 0) {
+        showNotification('Nombre y al menos un canal son requeridos', 'error');
+        return;
+    }
+
+    const ruleData = {
+        rule_name: name,
+        rule_type: type,
+        conditions: {severity: severity},
+        severity_threshold: severity,
+        channel_ids: selectedChannels,
+        cooldown_minutes: cooldown,
+        description,
+        is_enabled: enabled
+    };
+
+    try {
+        const url = currentRuleId ? `/alerts/api/rules/${currentRuleId}` : '/alerts/api/rules';
+        const method = currentRuleId ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+            method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(ruleData)
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            showNotification(data.message, 'success');
+            closeRuleModal();
+            loadRules();
+        } else {
+            showNotification(data.error, 'error');
+        }
+    } catch (e) {
+        showNotification('Error al guardar regla', 'error');
+    }
+}
+
+async function deleteRule(id) {
+    if (!confirm('¿Estas seguro de eliminar esta regla?')) return;
+
+    try {
+        const res = await fetch(`/alerts/api/rules/${id}`, {method: 'DELETE'});
+        const data = await res.json();
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadRules();
+        } else {
+            showNotification(data.error, 'error');
+        }
+    } catch (e) {
+        showNotification('Error al eliminar regla', 'error');
+    }
+}
+
+async function toggleRule(id) {
+    try {
+        const res = await fetch(`/alerts/api/rules/${id}/toggle`, {method: 'POST'});
+        const data = await res.json();
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadRules();
+        }
+    } catch (e) {
+        showNotification('Error al cambiar estado', 'error');
+    }
+}
+
+// === HISTORIAL ===
+async function loadLogs() {
+    try {
+        const severity = document.getElementById('filter-severity')?.value || '';
+        const url = `/alerts/api/logs?limit=50${severity ? '&severity=' + severity : ''}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const logs = data.logs || [];
+        const list = document.getElementById('logs-list');
+
+        if (logs.length === 0) {
+            list.innerHTML = '<p class="text-gray-500 text-center py-8">No hay alertas en el historial.</p>';
+            return;
+        }
+
+        const severityColors = {LOW: 'gray', MEDIUM: 'yellow', HIGH: 'orange', CRITICAL: 'red'};
+        list.innerHTML = logs.map(l => `
+            <div class="border-l-4 border-${severityColors[l.severity]}-500 bg-white p-3 rounded shadow-sm">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2 py-1 text-xs rounded bg-${severityColors[l.severity]}-100 text-${severityColors[l.severity]}-800">${l.severity}</span>
+                            ${l.success ? '<i class="fas fa-check-circle text-green-600"></i>' : '<i class="fas fa-times-circle text-red-600"></i>'}
+                            <span class="text-sm font-medium">${l.subject || 'Sin asunto'}</span>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-1">${l.message}</p>
+                        <p class="text-xs text-gray-400 mt-1">${new Date(l.sent_at).toLocaleString()}</p>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Error loading logs:', e);
+        showNotification('Error al cargar historial', 'error');
+    }
+}
+
+// === PRUEBA DE ALERTA ===
+async function sendTestAlert() {
+    const message = document.getElementById('test-message').value.trim() || 'Alerta de prueba del sistema';
+    const severity = document.getElementById('test-severity').value;
+
+    try {
+        const res = await fetch('/alerts/api/test-alert', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message, severity})
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            showNotification('Alerta de prueba enviada exitosamente', 'success');
+            setTimeout(() => loadLogs(), 2000);
+        } else {
+            showNotification(`Error: ${data.error}`, 'error');
+        }
+    } catch (e) {
+        showNotification('Error al enviar alerta de prueba', 'error');
+    }
+}
+</script>
+
+<style>
+.tab-button.active {
+    border-bottom-color: #3b82f6 !important;
+    color: #3b82f6 !important;
+}
+</style>
+{% endblock %}

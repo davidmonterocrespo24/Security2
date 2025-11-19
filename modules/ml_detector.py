@@ -34,6 +34,14 @@ class MLTrafficDetector:
         self.label_encoders = {}
         self.feature_names = []
 
+        # Inicializar sistema de alertas
+        self.alert_manager = None
+        try:
+            from modules.alert_manager import AlertManager
+            self.alert_manager = AlertManager(db_manager)
+        except Exception as e:
+            print(f"Advertencia: No se pudo inicializar AlertManager: {e}")
+
         # Crear directorio de modelos si no existe
         os.makedirs(model_path, exist_ok=True)
 
@@ -452,7 +460,7 @@ class MLTrafficDetector:
         # Generar razón
         reason = self._generate_reason(df, prediction, confidence, is_anomaly)
 
-        return {
+        result = {
             'is_suspicious': bool(prediction == 1),
             'confidence': confidence,
             'reason': reason,
@@ -461,6 +469,32 @@ class MLTrafficDetector:
             'probability_malicious': confidence,
             'probability_normal': float(probability[0]) if len(probability) > 1 else 0.5
         }
+
+        # INTEGRACIÓN CON SISTEMA DE ALERTAS
+        # Si detecta tráfico malicioso con alta confianza, disparar alerta
+        if self.alert_manager and prediction == 1 and confidence >= 0.8:
+            try:
+                # Preparar evento para el sistema de alertas
+                alert_event = {
+                    'type': 'ml_prediction',
+                    'severity': 'HIGH' if confidence >= 0.9 else 'MEDIUM' if confidence >= 0.8 else 'LOW',
+                    'ip': event_data.get('source_ip', 'unknown'),
+                    'ml_confidence': confidence,
+                    'confidence': int(confidence * 100),  # Convertir a porcentaje
+                    'country': event_data.get('country', 'Unknown'),
+                    'reason': reason,
+                    'timestamp': event_data.get('timestamp', datetime.utcnow().isoformat()),
+                    'attack_vector': event_data.get('attack_vector', 'unknown'),
+                    'event_type': event_data.get('event_type', 'unknown')
+                }
+
+                # Disparar alerta
+                self.alert_manager.process_alert(alert_event)
+            except Exception as e:
+                # No fallar si hay error en alertas, solo loguearlo
+                print(f"Error disparando alerta ML: {e}")
+
+        return result
 
     def _generate_reason(self, features_df, prediction, confidence, is_anomaly):
         """Generar explicación de la predicción"""

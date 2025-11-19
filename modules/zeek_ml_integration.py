@@ -14,6 +14,14 @@ class ZeekMLIntegration:
     def __init__(self, db_manager):
         self.db = db_manager
 
+        # Inicializar sistema de alertas
+        self.alert_manager = None
+        try:
+            from modules.alert_manager import AlertManager
+            self.alert_manager = AlertManager(db_manager)
+        except Exception as e:
+            print(f"Advertencia: No se pudo inicializar AlertManager: {e}")
+
     def extract_zeek_features_for_ip(self, ip_address, hours_back=24):
         """
         Extraer características de Zeek para una IP específica
@@ -270,6 +278,22 @@ class ZeekMLIntegration:
             if event_id:
                 events_created['port_scans'] += 1
 
+                # DISPARAR ALERTA
+                if self.alert_manager:
+                    try:
+                        self.alert_manager.process_alert({
+                            'type': 'zeek_detection',
+                            'detection_type': 'port_scan',
+                            'severity': scan['severity'].upper(),
+                            'ip': scan['ip'],
+                            'ports_count': scan['unique_ports'],
+                            'protocol': 'tcp',
+                            'reason': f"Port scan detectado: {scan['unique_ports']} puertos",
+                            'timestamp': datetime.utcnow().isoformat()
+                        })
+                    except Exception as e:
+                        print(f"Error disparando alerta de port scan: {e}")
+
         # === 2. DNS TUNNELING ===
         dns_analysis = zeek_detections.analyze_dns_queries(hours_back=hours_back * 24)
 
@@ -291,6 +315,22 @@ class ZeekMLIntegration:
             if event_id:
                 events_created['dns_tunneling'] += 1
 
+                # DISPARAR ALERTA
+                if self.alert_manager:
+                    try:
+                        self.alert_manager.process_alert({
+                            'type': 'zeek_detection',
+                            'detection_type': 'dns_tunneling',
+                            'severity': 'HIGH',
+                            'ip': tunnel['ip'],
+                            'domains_count': 1,
+                            'queries': tunnel['query'],
+                            'reason': f"DNS tunneling: {tunnel['query']} ({tunnel['query_length']} chars)",
+                            'timestamp': datetime.utcnow().isoformat()
+                        })
+                    except Exception as e:
+                        print(f"Error disparando alerta de DNS tunneling: {e}")
+
         # DGA (Domain Generation Algorithm)
         for dga in dns_analysis.get('dga', []):
             event_id = self.create_security_event_from_zeek(
@@ -306,6 +346,23 @@ class ZeekMLIntegration:
             )
             if event_id:
                 events_created['dga_domains'] += 1
+
+                # DISPARAR ALERTA
+                if self.alert_manager:
+                    try:
+                        self.alert_manager.process_alert({
+                            'type': 'zeek_detection',
+                            'detection_type': 'dga_domain',
+                            'severity': 'MEDIUM',
+                            'ip': dga['ip'],
+                            'domains_count': 1,
+                            'queries': dga['query'],
+                            'entropy': dga['entropy'],
+                            'reason': f"Dominio DGA detectado: {dga['query']} (entropia: {dga['entropy']:.2f})",
+                            'timestamp': datetime.utcnow().isoformat()
+                        })
+                    except Exception as e:
+                        print(f"Error disparando alerta de DGA: {e}")
 
         # === 3. BEACONING (C&C) ===
         beaconing = zeek_detections.detect_beaconing(
@@ -331,6 +388,24 @@ class ZeekMLIntegration:
             if event_id:
                 events_created['beaconing'] += 1
 
+                # DISPARAR ALERTA
+                if self.alert_manager:
+                    try:
+                        self.alert_manager.process_alert({
+                            'type': 'zeek_detection',
+                            'detection_type': 'beaconing',
+                            'severity': 'CRITICAL',
+                            'ip': beacon['source_ip'],
+                            'dest_ip': beacon['dest_ip'],
+                            'dest_port': beacon['dest_port'],
+                            'connection_count': beacon['connection_count'],
+                            'regularity': beacon['regularity'],
+                            'reason': f"Beaconing (C&C) a {beacon['dest_ip']}:{beacon['dest_port']} ({beacon['connection_count']} conexiones)",
+                            'timestamp': datetime.utcnow().isoformat()
+                        })
+                    except Exception as e:
+                        print(f"Error disparando alerta de beaconing: {e}")
+
         # === 4. SSL ISSUES ===
         ssl_analysis = zeek_detections.analyze_ssl_certificates(hours_back=hours_back * 24)
 
@@ -349,6 +424,22 @@ class ZeekMLIntegration:
             )
             if event_id:
                 events_created['ssl_issues'] += 1
+
+                # DISPARAR ALERTA
+                if self.alert_manager:
+                    try:
+                        self.alert_manager.process_alert({
+                            'type': 'zeek_detection',
+                            'detection_type': 'ssl_self_signed',
+                            'severity': 'MEDIUM',
+                            'ip': cert['source_ip'],
+                            'server_name': cert['server_name'],
+                            'issuer': cert['issuer'],
+                            'reason': f"Certificado SSL autofirmado: {cert['server_name']}",
+                            'timestamp': datetime.utcnow().isoformat()
+                        })
+                    except Exception as e:
+                        print(f"Error disparando alerta de SSL: {e}")
 
         # Total
         events_created['total'] = sum([
