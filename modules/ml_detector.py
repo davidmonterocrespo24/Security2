@@ -766,8 +766,13 @@ class MLTrafficDetector:
 
         # Intentar obtener país del evento primero
         for event in events_list:
-            if event.get('country') and event.get('country') != 'unknown':
-                country = event['country']
+            event_country = event.get('country')
+            if event_country and event_country not in ['unknown', 'Unknown', '', None]:
+                country = event_country
+                # Intentar obtener country_code si está disponible
+                if '(' in country and ')' in country:
+                    # Formato: "United States (US)"
+                    country_code = country.split('(')[1].split(')')[0]
                 break
 
         # Si no hay país en el evento, usar servicio de geolocalización
@@ -777,6 +782,19 @@ class MLTrafficDetector:
                 if geo_info:
                     country = f"{geo_info['country_name']} ({geo_info['country_code']})"
                     country_code = geo_info['country_code']
+            except Exception as e:
+                print(f"Error obteniendo geo info para {ip}: {e}")
+
+        # Si todavía no tenemos país, intentar consultar la base de datos
+        if country == 'Unknown':
+            try:
+                from database.models import IPGeolocation
+                session = self.db.get_session()
+                geo = session.query(IPGeolocation).filter_by(ip=ip).first()
+                if geo and geo.country:
+                    country = f"{geo.country} ({geo.country_code})" if geo.country_code else geo.country
+                    country_code = geo.country_code or 'XX'
+                session.close()
             except Exception as e:
                 pass
 
