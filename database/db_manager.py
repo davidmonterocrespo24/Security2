@@ -213,7 +213,7 @@ class DatabaseManager:
                 },
                 'unique_ips': unique_ips,
                 'top_ips': top_ips,
-                'top_attackers': [{'ip': ip, 'count': count} for ip, count in top_ips_query],  # Compatibilidad
+                'top_attackers': [{'ip': ip, 'count': count} for ip, count, _, _ in top_ips_query],  # Compatibilidad
                 'by_country': by_country,
                 'hourly_stats': hourly_stats,
                 'geo_data': geo_data
