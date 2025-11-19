@@ -217,6 +217,65 @@ async function loadSecurityDashboard() {
 function initializeAttackMap(geoData) {
     const mapContainer = document.getElementById('attack-map');
 
+    // Si no hay datos geográficos, mostrar mensaje
+    if (!geoData || geoData.length === 0) {
+        mapContainer.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-500">No hay datos de ataques para mostrar en el mapa</p></div>';
+        return;
+    }
+
+    // Verificar si hay al menos una ubicación con coordenadas
+    const hasCoordinates = geoData.some(loc => loc.lat && loc.lon);
+
+    if (!hasCoordinates) {
+        // Sin coordenadas, mostrar lista de países en lugar de mapa
+        mapContainer.innerHTML = '<div class="p-4"><p class="text-sm text-gray-600 mb-3">Ataques por país (sin coordenadas geográficas):</p><div class="space-y-2" id="country-list"></div></div>';
+
+        const countryList = document.getElementById('country-list');
+        const countryCounts = {};
+
+        // Agrupar por país
+        geoData.forEach(location => {
+            const country = location.country || 'Unknown';
+            if (!countryCounts[country]) {
+                countryCounts[country] = { count: 0, severity: 'low', ips: [] };
+            }
+            countryCounts[country].count += location.count;
+            countryCounts[country].ips.push(location.ip);
+            // Mantener la severidad más alta
+            const severities = ['low', 'medium', 'high', 'critical'];
+            if (severities.indexOf(location.severity) > severities.indexOf(countryCounts[country].severity)) {
+                countryCounts[country].severity = location.severity;
+            }
+        });
+
+        // Ordenar por conteo
+        const sorted = Object.entries(countryCounts).sort((a, b) => b[1].count - a[1].count);
+
+        sorted.forEach(([country, data]) => {
+            const severityColors = {
+                'critical': 'bg-red-100 border-red-500 text-red-800',
+                'high': 'bg-orange-100 border-orange-500 text-orange-800',
+                'medium': 'bg-yellow-100 border-yellow-500 text-yellow-800',
+                'low': 'bg-blue-100 border-blue-500 text-blue-800'
+            };
+            const colorClass = severityColors[data.severity] || severityColors.low;
+
+            const div = document.createElement('div');
+            div.className = `p-2 rounded border-l-4 ${colorClass}`;
+            div.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span class="font-medium text-sm">${country}</span>
+                    <span class="text-xs px-2 py-1 rounded-full ${colorClass}">${data.count} ataques</span>
+                </div>
+                <div class="text-xs mt-1 text-gray-600">${data.ips.length} IP(s): ${data.ips.slice(0, 3).join(', ')}${data.ips.length > 3 ? '...' : ''}</div>
+            `;
+            countryList.appendChild(div);
+        });
+
+        return;
+    }
+
+    // Inicializar mapa Leaflet si hay coordenadas
     if (!attackMap) {
         attackMap = L.map('attack-map').setView([20, 0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

@@ -81,7 +81,7 @@ class DatabaseManager:
             session.close()
 
     def get_attack_statistics(self, hours=24):
-        """Obtener estadísticas de ataques"""
+        """Obtener estadísticas completas de ataques incluyendo datos geográficos"""
         session = self.get_session()
         try:
             since = datetime.utcnow() - timedelta(hours=hours)
@@ -91,7 +91,7 @@ class DatabaseManager:
                 SecurityEvent.timestamp >= since
             ).scalar()
 
-            # Por tipo
+            # Por tipo de ataque
             by_type = session.query(
                 SecurityEvent.event_type,
                 func.count(SecurityEvent.id)
@@ -100,12 +100,14 @@ class DatabaseManager:
             ).group_by(SecurityEvent.event_type).all()
 
             # Por severidad
-            by_severity = session.query(
+            by_severity_data = session.query(
                 SecurityEvent.severity,
                 func.count(SecurityEvent.id)
             ).filter(
                 SecurityEvent.timestamp >= since
             ).group_by(SecurityEvent.severity).all()
+
+            by_severity_dict = dict(by_severity_data)
 
             # IPs únicas
             unique_ips = session.query(
@@ -114,20 +116,107 @@ class DatabaseManager:
                 SecurityEvent.timestamp >= since
             ).scalar()
 
-            # Top atacantes
-            top_attackers = session.query(
+            # Top atacantes con información completa
+            top_ips_query = session.query(
                 SecurityEvent.source_ip,
-                func.count(SecurityEvent.id).label('count')
+                func.count(SecurityEvent.id).label('count'),
+                func.max(SecurityEvent.severity).label('max_severity'),
+                func.max(SecurityEvent.country).label('country')
             ).filter(
                 SecurityEvent.timestamp >= since
             ).group_by(SecurityEvent.source_ip).order_by(desc('count')).limit(10).all()
 
+            top_ips = []
+            for ip, count, max_severity, country in top_ips_query:
+                # Verificar si está bloqueada
+                blocked = session.query(BlockedIP).filter(
+                    and_(
+                        BlockedIP.ip_address == ip,
+                        or_(
+                            BlockedIP.is_permanent == True,
+                            BlockedIP.unblock_time > datetime.utcnow()
+                        )
+                    )
+                ).first()
+
+                top_ips.append({
+                    'ip_address': ip,
+                    'count': count,
+                    'max_severity': max_severity or 'low',
+                    'country': country or 'Unknown',
+                    'is_blocked': blocked is not None
+                })
+
+            # Estadísticas por país
+            by_country_data = session.query(
+                SecurityEvent.country,
+                func.count(SecurityEvent.id)
+            ).filter(
+                SecurityEvent.timestamp >= since
+            ).group_by(SecurityEvent.country).all()
+
+            by_country = {}
+            for country, count in by_country_data:
+                if country and country not in ['Unknown', 'unknown', None, '']:
+                    by_country[country] = count
+
+            # Estadísticas horarias
+            hourly_stats = []
+            interval_hours = min(hours, 24)
+            interval_minutes = (hours * 60) // interval_hours
+
+            for i in range(interval_hours):
+                interval_start = since + timedelta(minutes=i * interval_minutes)
+                interval_end = interval_start + timedelta(minutes=interval_minutes)
+
+                interval_events = session.query(
+                    SecurityEvent.severity,
+                    func.count(SecurityEvent.id)
+                ).filter(
+                    and_(
+                        SecurityEvent.timestamp >= interval_start,
+                        SecurityEvent.timestamp < interval_end
+                    )
+                ).group_by(SecurityEvent.severity).all()
+
+                severity_counts = dict(interval_events)
+                hourly_stats.append({
+                    'hour': interval_start.strftime('%H:%M'),
+                    'critical': severity_counts.get('critical', 0),
+                    'high': severity_counts.get('high', 0),
+                    'medium': severity_counts.get('medium', 0),
+                    'low': severity_counts.get('low', 0)
+                })
+
+            # Datos geográficos para el mapa
+            geo_data = []
+            for ip, count, severity, country in top_ips_query[:20]:
+                if country and country not in ['Unknown', 'unknown', None, '']:
+                    geo_data.append({
+                        'ip': ip,
+                        'country': country,
+                        'count': count,
+                        'severity': severity or 'low',
+                        'lat': None,
+                        'lon': None
+                    })
+
             return {
                 'total_events': total,
-                'by_type': dict(by_type),
-                'by_severity': dict(by_severity),
+                'by_attack_type': dict(by_type),
+                'by_type': dict(by_type),  # Compatibilidad
+                'by_severity': {
+                    'critical': by_severity_dict.get('critical', 0),
+                    'high': by_severity_dict.get('high', 0),
+                    'medium': by_severity_dict.get('medium', 0),
+                    'low': by_severity_dict.get('low', 0)
+                },
                 'unique_ips': unique_ips,
-                'top_attackers': [{'ip': ip, 'count': count} for ip, count in top_attackers]
+                'top_ips': top_ips,
+                'top_attackers': [{'ip': ip, 'count': count} for ip, count in top_ips_query],  # Compatibilidad
+                'by_country': by_country,
+                'hourly_stats': hourly_stats,
+                'geo_data': geo_data
             }
         finally:
             session.close()
