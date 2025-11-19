@@ -1201,3 +1201,123 @@ class DatabaseManager:
             return 0
         finally:
             session.close()
+
+    # ==================== AUTO-BLOCK POLICIES ====================
+
+    def get_auto_block_policies(self):
+        """Obtener todas las políticas de auto-bloqueo"""
+        session = self.get_session()
+        try:
+            policies = session.query(AutoBlockPolicy).order_by(AutoBlockPolicy.id).all()
+            return [p.to_dict() for p in policies]
+        finally:
+            session.close()
+
+    def get_active_auto_block_policy(self):
+        """Obtener la primera política de auto-bloqueo activa"""
+        session = self.get_session()
+        try:
+            policy = session.query(AutoBlockPolicy).filter_by(enabled=True).first()
+            return policy.to_dict() if policy else None
+        finally:
+            session.close()
+
+    def create_auto_block_policy(self, policy_name, description, **kwargs):
+        """Crear nueva política de auto-bloqueo"""
+        session = self.get_session()
+        try:
+            policy = AutoBlockPolicy(
+                policy_name=policy_name,
+                description=description,
+                created_at=datetime.utcnow(),
+                **kwargs
+            )
+            session.add(policy)
+            session.commit()
+            return policy.to_dict()
+        except Exception as e:
+            session.rollback()
+            print(f"Error creating auto-block policy: {e}")
+            return None
+        finally:
+            session.close()
+
+    def update_auto_block_policy(self, policy_id, **kwargs):
+        """Actualizar política de auto-bloqueo"""
+        session = self.get_session()
+        try:
+            policy = session.query(AutoBlockPolicy).filter_by(id=policy_id).first()
+            if not policy:
+                return False
+
+            # Actualizar campos proporcionados
+            for key, value in kwargs.items():
+                if hasattr(policy, key):
+                    setattr(policy, key, value)
+
+            policy.updated_at = datetime.utcnow()
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error updating auto-block policy: {e}")
+            return False
+        finally:
+            session.close()
+
+    def delete_auto_block_policy(self, policy_id):
+        """Eliminar política de auto-bloqueo"""
+        session = self.get_session()
+        try:
+            policy = session.query(AutoBlockPolicy).filter_by(id=policy_id).first()
+            if policy:
+                session.delete(policy)
+                session.commit()
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"Error deleting auto-block policy: {e}")
+            return False
+        finally:
+            session.close()
+
+    def enable_auto_block_policy(self, policy_id, enabled=True):
+        """Habilitar o deshabilitar política de auto-bloqueo"""
+        session = self.get_session()
+        try:
+            # Si se habilita una política, deshabilitar las demás
+            if enabled:
+                session.query(AutoBlockPolicy).update({'enabled': False})
+
+            policy = session.query(AutoBlockPolicy).filter_by(id=policy_id).first()
+            if policy:
+                policy.enabled = enabled
+                policy.updated_at = datetime.utcnow()
+                session.commit()
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"Error enabling/disabling policy: {e}")
+            return False
+        finally:
+            session.close()
+
+    def increment_policy_block_count(self, policy_id):
+        """Incrementar contador de bloqueos de una política"""
+        session = self.get_session()
+        try:
+            policy = session.query(AutoBlockPolicy).filter_by(id=policy_id).first()
+            if policy:
+                policy.total_blocks += 1
+                policy.last_block_at = datetime.utcnow()
+                session.commit()
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            print(f"Error incrementing policy block count: {e}")
+            return False
+        finally:
+            session.close()

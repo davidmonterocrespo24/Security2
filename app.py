@@ -124,6 +124,15 @@ from routes.integrated_routes import create_integrated_blueprint
 integrated_blueprint = create_integrated_blueprint(integrated_analyzer)
 app.register_blueprint(integrated_blueprint)
 
+# Inicializar sistema de auto-bloqueo
+from modules.auto_blocker import AutoBlocker
+auto_blocker = AutoBlocker(db_manager, fail2ban_manager)
+
+# Registrar blueprint de auto-bloqueo
+from routes.auto_block_routes import create_auto_block_blueprint
+auto_block_blueprint = create_auto_block_blueprint(db_manager, auto_blocker)
+app.register_blueprint(auto_block_blueprint)
+
 # Iniciar worker de tareas en background
 task_scheduler.start_worker()
 

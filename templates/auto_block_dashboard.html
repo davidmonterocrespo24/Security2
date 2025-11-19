@@ -1,0 +1,758 @@
+{% extends "base.html" %}
+{% block title %}Auto-Bloqueo ML - Configuración{% endblock %}
+{% block header %}Auto-Bloqueo Basado en Machine Learning{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header con acciones principales -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-2xl font-bold">Gestión de Políticas de Auto-Bloqueo</h2>
+                <p class="text-gray-600 mt-1">Configure políticas para bloquear automáticamente IPs maliciosas detectadas por ML</p>
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="refreshDashboard()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                    <i class="fas fa-sync mr-2"></i>Actualizar
+                </button>
+                <button onclick="showCreatePolicyModal()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    <i class="fas fa-plus mr-2"></i>Nueva Política
+                </button>
+                <button onclick="showProcessModal()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                    <i class="fas fa-play mr-2"></i>Procesar Ahora
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas Generales -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">IPs Evaluadas (24h)</p>
+                    <p id="stat-evaluated" class="text-2xl font-bold">0</p>
+                </div>
+                <i class="fas fa-search text-blue-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">IPs Bloqueadas (24h)</p>
+                    <p id="stat-blocked" class="text-2xl font-bold text-red-600">0</p>
+                </div>
+                <i class="fas fa-ban text-red-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Tasa de Bloqueo</p>
+                    <p id="stat-rate" class="text-2xl font-bold text-orange-600">0%</p>
+                </div>
+                <i class="fas fa-percentage text-orange-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Política Activa</p>
+                    <p id="stat-policy" class="text-lg font-bold text-green-600">Ninguna</p>
+                </div>
+                <i class="fas fa-shield-alt text-green-500 text-3xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Política Activa -->
+    <div id="active-policy-section" class="bg-gradient-to-r from-green-50 to-green-100 border-l-4 border-green-500 rounded-lg shadow p-6 hidden">
+        <div class="flex items-start justify-between">
+            <div class="flex-1">
+                <div class="flex items-center space-x-3 mb-3">
+                    <i class="fas fa-check-circle text-green-600 text-2xl"></i>
+                    <h3 class="text-xl font-bold text-green-900">Política Activa</h3>
+                </div>
+                <div id="active-policy-details" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+            <button onclick="deactivatePolicy()" class="ml-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                <i class="fas fa-stop mr-2"></i>Desactivar
+            </button>
+        </div>
+    </div>
+
+    <!-- Advertencia: Sin política activa -->
+    <div id="no-policy-warning" class="bg-yellow-50 border-l-4 border-yellow-500 rounded-lg shadow p-6">
+        <div class="flex items-start">
+            <i class="fas fa-exclamation-triangle text-yellow-600 text-2xl mr-3"></i>
+            <div>
+                <h3 class="text-lg font-bold text-yellow-900 mb-1">No hay ninguna política activa</h3>
+                <p class="text-yellow-800">El auto-bloqueo está desactivado. Active una política para comenzar a bloquear IPs maliciosas automáticamente.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Políticas -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold mb-4">
+            <i class="fas fa-list mr-2 text-blue-600"></i>Políticas Configuradas
+        </h3>
+        <div id="policies-list" class="space-y-3">
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
+                <p>Cargando políticas...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico de Estadísticas -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Bloques por Severidad -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4">
+                <i class="fas fa-chart-pie mr-2 text-purple-600"></i>Bloques por Severidad
+            </h3>
+            <div style="height: 300px;">
+                <canvas id="severityChart"></canvas>
+            </div>
+        </div>
+
+        <!-- IPs Bloqueadas Recientemente -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4">
+                <i class="fas fa-clock mr-2 text-red-600"></i>IPs Bloqueadas Recientemente
+            </h3>
+            <div id="recent-blocks" class="space-y-2 max-h-80 overflow-y-auto">
+                <p class="text-gray-500 text-center py-8">No hay bloqueos recientes</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Crear/Editar Política -->
+<div id="policyModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-screen overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-semibold" id="policy-modal-title">Nueva Política</h3>
+            <button onclick="closePolicyModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+
+        <form id="policyForm" onsubmit="savePo licy(event)">
+            <input type="hidden" id="policy-id" value="">
+
+            <!-- Información Básica -->
+            <div class="mb-6">
+                <h4 class="font-semibold mb-3 text-blue-600">Información Básica</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Nombre de la Política *</label>
+                        <input type="text" id="policy-name" required class="w-full border rounded px-3 py-2" placeholder="ej: aggressive">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Descripción</label>
+                        <input type="text" id="policy-description" class="w-full border rounded px-3 py-2" placeholder="Descripción de la política">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Criterios de Bloqueo -->
+            <div class="mb-6">
+                <h4 class="font-semibold mb-3 text-purple-600">Criterios de Bloqueo</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Confianza ML Mínima (%)</label>
+                        <input type="number" id="policy-ml-confidence" min="0" max="100" step="0.1" value="85.0" class="w-full border rounded px-3 py-2">
+                        <p class="text-xs text-gray-500 mt-1">Predicción ML debe superar este %</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Threat Score Mínimo</label>
+                        <input type="number" id="policy-threat-score" min="0" max="200" step="0.1" value="70.0" class="w-full border rounded px-3 py-2">
+                        <p class="text-xs text-gray-500 mt-1">Score combinado ML+Zeek+F2B</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Severidad Mínima</label>
+                        <select id="policy-min-severity" class="w-full border rounded px-3 py-2">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high" selected>High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Eventos Mínimos</label>
+                        <input type="number" id="policy-min-events" min="1" max="100" value="3" class="w-full border rounded px-3 py-2">
+                        <p class="text-xs text-gray-500 mt-1">Número mínimo de eventos</p>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="policy-require-multiple" checked class="mr-2">
+                        <span class="text-sm">Requerir detección en múltiples fuentes (ML + Zeek/Fail2ban)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Configuración de Bloqueo -->
+            <div class="mb-6">
+                <h4 class="font-semibold mb-3 text-orange-600">Configuración de Bloqueo</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Duración del Bloqueo (horas)</label>
+                        <input type="number" id="policy-duration" min="1" max="8760" value="24" class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div class="flex items-center space-x-4 mt-6">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="policy-permanent" class="mr-2">
+                            <span class="text-sm">Bloqueo Permanente</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="policy-apply-f2b" checked class="mr-2">
+                            <span class="text-sm">Aplicar en Fail2ban</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Excepciones -->
+            <div class="mb-6">
+                <h4 class="font-semibold mb-3 text-green-600">Excepciones</h4>
+                <div class="space-y-2">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="policy-whitelist" checked class="mr-2">
+                        <span class="text-sm">Respetar Whitelist (IPs en whitelist nunca se bloquean)</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="policy-exclude-internal" checked class="mr-2">
+                        <span class="text-sm">Excluir IPs Internas (192.168.x.x, 10.x.x.x, etc.)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Botones -->
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closePolicyModal()" class="px-4 py-2 border rounded hover:bg-gray-100">
+                    Cancelar
+                </button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    <i class="fas fa-save mr-2"></i>Guardar Política
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Procesar Predicciones -->
+<div id="processModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-semibold">Procesar Predicciones ML</h3>
+            <button onclick="closeProcessModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+
+        <div class="mb-4">
+            <label class="flex items-center mb-3 p-3 border-2 border-yellow-400 bg-yellow-50 rounded">
+                <input type="checkbox" id="process-dry-run" checked class="mr-3">
+                <div>
+                    <span class="font-semibold text-yellow-900">Modo Dry-Run (Prueba)</span>
+                    <p class="text-sm text-yellow-800">Evalúa pero NO bloquea las IPs. Recomendado para probar.</p>
+                </div>
+            </label>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Horas hacia Atrás</label>
+                    <input type="number" id="process-hours" min="1" max="168" value="24" class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Límite de IPs</label>
+                    <input type="number" id="process-limit" min="1" max="1000" value="100" class="w-full border rounded px-3 py-2">
+                </div>
+            </div>
+        </div>
+
+        <div id="process-results" class="hidden mb-4 p-4 bg-gray-50 rounded">
+            <!-- Se llenará con resultados -->
+        </div>
+
+        <div class="flex justify-end space-x-2">
+            <button onclick="closeProcessModal()" class="px-4 py-2 border rounded hover:bg-gray-100">
+                Cancelar
+            </button>
+            <button onclick="processPredictions()" id="process-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                <i class="fas fa-play mr-2"></i>Procesar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let charts = {};
+let policies = [];
+let activePolicy = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    refreshDashboard();
+    setInterval(() => loadStats(), 60000); // Auto-refresh stats cada minuto
+});
+
+async function refreshDashboard() {
+    await Promise.all([
+        loadPolicies(),
+        loadStats()
+    ]);
+}
+
+async function loadPolicies() {
+    try {
+        const res = await fetch('/auto-block/api/policies');
+        const data = await res.json();
+
+        if (data.success) {
+            policies = data.policies;
+            activePolicy = policies.find(p => p.enabled);
+
+            // Actualizar UI de política activa
+            updateActivePolicyUI();
+
+            // Renderizar lista de políticas
+            renderPoliciesList();
+        }
+    } catch (e) {
+        console.error('Error loading policies:', e);
+        showNotification('Error al cargar políticas', 'error');
+    }
+}
+
+async function loadStats() {
+    try {
+        const res = await fetch('/auto-block/api/stats?hours=24');
+        const data = await res.json();
+
+        if (data.success) {
+            const stats = data.stats;
+            document.getElementById('stat-evaluated').textContent = stats.total_evaluated || 0;
+            document.getElementById('stat-blocked').textContent = stats.total_blocked || 0;
+            document.getElementById('stat-rate').textContent = (stats.block_rate || 0).toFixed(1) + '%';
+
+            // Actualizar gráfico de severidad
+            if (stats.by_severity) {
+                updateSeverityChart(stats.by_severity);
+            }
+
+            // Actualizar lista de IPs bloqueadas
+            if (stats.top_blocked_ips) {
+                renderRecentBlocks(stats.top_blocked_ips);
+            }
+        }
+    } catch (e) {
+        console.error('Error loading stats:', e);
+    }
+}
+
+function updateActivePolicyUI() {
+    const activePolicySection = document.getElementById('active-policy-section');
+    const noPolicyWarning = document.getElementById('no-policy-warning');
+    const statPolicy = document.getElementById('stat-policy');
+
+    if (activePolicy) {
+        activePolicySection.classList.remove('hidden');
+        noPolicyWarning.classList.add('hidden');
+        statPolicy.textContent = activePolicy.policy_name;
+
+        document.getElementById('active-policy-details').innerHTML = `
+            <div>
+                <p class="text-gray-600 text-xs">Nombre</p>
+                <p class="font-semibold">${activePolicy.policy_name}</p>
+            </div>
+            <div>
+                <p class="text-gray-600 text-xs">ML Confidence</p>
+                <p class="font-semibold">${activePolicy.criteria.min_ml_confidence}%</p>
+            </div>
+            <div>
+                <p class="text-gray-600 text-xs">Threat Score</p>
+                <p class="font-semibold">${activePolicy.criteria.min_threat_score}</p>
+            </div>
+            <div>
+                <p class="text-gray-600 text-xs">Severidad Mín.</p>
+                <p class="font-semibold">${activePolicy.criteria.min_severity}</p>
+            </div>
+            <div>
+                <p class="text-gray-600 text-xs">Eventos Mín.</p>
+                <p class="font-semibold">${activePolicy.criteria.min_events}</p>
+            </div>
+            <div>
+                <p class="text-gray-600 text-xs">Bloqueos Totales</p>
+                <p class="font-semibold text-red-600">${activePolicy.statistics.total_blocks}</p>
+            </div>
+            <div>
+                <p class="text-gray-600 text-xs">Duración</p>
+                <p class="font-semibold">${activePolicy.block_config.permanent_block ? 'Permanente' : activePolicy.block_config.default_block_duration + 'h'}</p>
+            </div>
+            <div>
+                <p class="text-gray-600 text-xs">Fail2ban</p>
+                <p class="font-semibold">${activePolicy.block_config.apply_to_fail2ban ? 'Sí' : 'No'}</p>
+            </div>
+        `;
+    } else {
+        activePolicySection.classList.add('hidden');
+        noPolicyWarning.classList.remove('hidden');
+        statPolicy.textContent = 'Ninguna';
+    }
+}
+
+function renderPoliciesList() {
+    const container = document.getElementById('policies-list');
+
+    if (policies.length === 0) {
+        container.innerHTML = '<p class="text-center py-8 text-gray-500">No hay políticas configuradas. Cree una para comenzar.</p>';
+        return;
+    }
+
+    container.innerHTML = policies.map(p => `
+        <div class="border rounded-lg p-4 ${p.enabled ? 'border-green-500 bg-green-50' : 'border-gray-300'}">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <h4 class="text-lg font-semibold">${p.policy_name}</h4>
+                        ${p.enabled ? '<span class="px-2 py-1 bg-green-600 text-white text-xs rounded">ACTIVA</span>' : '<span class="px-2 py-1 bg-gray-400 text-white text-xs rounded">INACTIVA</span>'}
+                    </div>
+                    <p class="text-sm text-gray-600 mb-3">${p.description || 'Sin descripción'}</p>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        <div class="bg-white p-2 rounded border">
+                            <p class="text-gray-500">ML Confidence</p>
+                            <p class="font-semibold">${p.criteria.min_ml_confidence}%</p>
+                        </div>
+                        <div class="bg-white p-2 rounded border">
+                            <p class="text-gray-500">Threat Score</p>
+                            <p class="font-semibold">${p.criteria.min_threat_score}</p>
+                        </div>
+                        <div class="bg-white p-2 rounded border">
+                            <p class="text-gray-500">Severidad Mín.</p>
+                            <p class="font-semibold">${p.criteria.min_severity}</p>
+                        </div>
+                        <div class="bg-white p-2 rounded border">
+                            <p class="text-gray-500">Bloqueos</p>
+                            <p class="font-semibold text-red-600">${p.statistics.total_blocks}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ml-4 flex flex-col space-y-2">
+                    ${!p.enabled ? `
+                        <button onclick="togglePolicy(${p.id}, true)" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+                            <i class="fas fa-play mr-1"></i>Activar
+                        </button>
+                    ` : `
+                        <button onclick="togglePolicy(${p.id}, false)" class="px-3 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700">
+                            <i class="fas fa-pause mr-1"></i>Desactivar
+                        </button>
+                    `}
+                    <button onclick="editPolicy(${p.id})" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                        <i class="fas fa-edit mr-1"></i>Editar
+                    </button>
+                    ${!p.enabled ? `
+                        <button onclick="deletePolicy(${p.id}, '${p.policy_name}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+                            <i class="fas fa-trash mr-1"></i>Eliminar
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateSeverityChart(severities) {
+    const data = [
+        severities.critical || 0,
+        severities.high || 0,
+        severities.medium || 0,
+        severities.low || 0
+    ];
+
+    if (charts.severity) charts.severity.destroy();
+
+    const ctx = document.getElementById('severityChart').getContext('2d');
+    charts.severity = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Critical', 'High', 'Medium', 'Low'],
+            datasets: [{
+                data: data,
+                backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#10b981']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {legend: {position: 'right'}}
+        }
+    });
+}
+
+function renderRecentBlocks(blocks) {
+    const container = document.getElementById('recent-blocks');
+
+    if (!blocks || blocks.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-8">No hay bloqueos recientes</p>';
+        return;
+    }
+
+    container.innerHTML = blocks.map(block => `
+        <div class="flex items-center justify-between p-3 border rounded hover:bg-gray-50">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-ban text-red-500"></i>
+                <div>
+                    <p class="font-mono text-sm font-semibold">${block.ip}</p>
+                    <p class="text-xs text-gray-500">${block.severity} - ${block.count} eventos</p>
+                </div>
+            </div>
+            <span class="text-xs text-gray-500">${block.last_blocked || 'Reciente'}</span>
+        </div>
+    `).join('');
+}
+
+// ============================================================================
+// MODAL HANDLERS
+// ============================================================================
+
+function showCreatePolicyModal() {
+    document.getElementById('policy-modal-title').textContent = 'Nueva Política';
+    document.getElementById('policyForm').reset();
+    document.getElementById('policy-id').value = '';
+    document.getElementById('policyModal').classList.remove('hidden');
+}
+
+function closePolicyModal() {
+    document.getElementById('policyModal').classList.add('hidden');
+}
+
+function showProcessModal() {
+    if (!activePolicy) {
+        showNotification('Debe activar una política primero', 'error');
+        return;
+    }
+    document.getElementById('process-results').classList.add('hidden');
+    document.getElementById('processModal').classList.remove('hidden');
+}
+
+function closeProcessModal() {
+    document.getElementById('processModal').classList.add('hidden');
+}
+
+// ============================================================================
+// CRUD OPERATIONS
+// ============================================================================
+
+async function savePolicy(event) {
+    event.preventDefault();
+
+    const policyId = document.getElementById('policy-id').value;
+    const isEdit = policyId !== '';
+
+    const policyData = {
+        policy_name: document.getElementById('policy-name').value,
+        description: document.getElementById('policy-description').value,
+        min_ml_confidence: parseFloat(document.getElementById('policy-ml-confidence').value),
+        min_threat_score: parseFloat(document.getElementById('policy-threat-score').value),
+        min_severity: document.getElementById('policy-min-severity').value,
+        min_events: parseInt(document.getElementById('policy-min-events').value),
+        require_multiple_sources: document.getElementById('policy-require-multiple').checked,
+        default_block_duration: parseInt(document.getElementById('policy-duration').value),
+        permanent_block: document.getElementById('policy-permanent').checked,
+        apply_to_fail2ban: document.getElementById('policy-apply-f2b').checked,
+        whitelist_enabled: document.getElementById('policy-whitelist').checked,
+        exclude_internal_ips: document.getElementById('policy-exclude-internal').checked,
+        created_by: 'web_interface'
+    };
+
+    try {
+        const url = isEdit ? `/auto-block/api/policies/${policyId}` : '/auto-block/api/policies';
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method: method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(policyData)
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            showNotification(isEdit ? 'Política actualizada' : 'Política creada', 'success');
+            closePolicyModal();
+            await loadPolicies();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error('Error saving policy:', e);
+        showNotification('Error al guardar política', 'error');
+    }
+}
+
+async function editPolicy(policyId) {
+    const policy = policies.find(p => p.id === policyId);
+    if (!policy) return;
+
+    document.getElementById('policy-modal-title').textContent = 'Editar Política';
+    document.getElementById('policy-id').value = policy.id;
+    document.getElementById('policy-name').value = policy.policy_name;
+    document.getElementById('policy-description').value = policy.description || '';
+    document.getElementById('policy-ml-confidence').value = policy.criteria.min_ml_confidence;
+    document.getElementById('policy-threat-score').value = policy.criteria.min_threat_score;
+    document.getElementById('policy-min-severity').value = policy.criteria.min_severity;
+    document.getElementById('policy-min-events').value = policy.criteria.min_events;
+    document.getElementById('policy-require-multiple').checked = policy.criteria.require_multiple_sources;
+    document.getElementById('policy-duration').value = policy.block_config.default_block_duration;
+    document.getElementById('policy-permanent').checked = policy.block_config.permanent_block;
+    document.getElementById('policy-apply-f2b').checked = policy.block_config.apply_to_fail2ban;
+    document.getElementById('policy-whitelist').checked = policy.block_config.whitelist_enabled;
+    document.getElementById('policy-exclude-internal').checked = policy.block_config.exclude_internal_ips;
+
+    document.getElementById('policyModal').classList.remove('hidden');
+}
+
+async function togglePolicy(policyId, enable) {
+    try {
+        const res = await fetch(`/auto-block/api/policies/${policyId}/toggle`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({enabled: enable, updated_by: 'web_interface'})
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            showNotification(`Política ${enable ? 'activada' : 'desactivada'}`, 'success');
+            await loadPolicies();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error('Error toggling policy:', e);
+        showNotification('Error al cambiar estado de política', 'error');
+    }
+}
+
+async function deletePolicy(policyId, policyName) {
+    if (!confirm(`¿Está seguro de eliminar la política "${policyName}"?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/auto-block/api/policies/${policyId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            showNotification('Política eliminada', 'success');
+            await loadPolicies();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error('Error deleting policy:', e);
+        showNotification('Error al eliminar política', 'error');
+    }
+}
+
+async function deactivatePolicy() {
+    if (activePolicy) {
+        await togglePolicy(activePolicy.id, false);
+    }
+}
+
+async function processPredictions() {
+    const dryRun = document.getElementById('process-dry-run').checked;
+    const hours = parseInt(document.getElementById('process-hours').value);
+    const limit = parseInt(document.getElementById('process-limit').value);
+
+    document.getElementById('process-btn').disabled = true;
+    document.getElementById('process-btn').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando...';
+
+    try {
+        const res = await fetch('/auto-block/api/process', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({dry_run: dryRun, hours_back: hours, limit: limit})
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            const results = data.results;
+            const resultsDiv = document.getElementById('process-results');
+
+            resultsDiv.innerHTML = `
+                <h4 class="font-semibold mb-2">${dryRun ? 'Resultados (Dry-Run - No se bloquearon IPs)' : 'Resultados del Procesamiento'}</h4>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="bg-blue-100 p-3 rounded">
+                        <p class="text-gray-600">IPs Evaluadas</p>
+                        <p class="text-2xl font-bold text-blue-600">${results.evaluated || 0}</p>
+                    </div>
+                    <div class="bg-red-100 p-3 rounded">
+                        <p class="text-gray-600">IPs ${dryRun ? 'a Bloquear' : 'Bloqueadas'}</p>
+                        <p class="text-2xl font-bold text-red-600">${results.blocked || 0}</p>
+                    </div>
+                    <div class="bg-yellow-100 p-3 rounded">
+                        <p class="text-gray-600">Ya Bloqueadas</p>
+                        <p class="text-xl font-bold text-yellow-600">${results.already_blocked || 0}</p>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded">
+                        <p class="text-gray-600">En Whitelist</p>
+                        <p class="text-xl font-bold text-green-600">${results.whitelisted || 0}</p>
+                    </div>
+                    <div class="bg-gray-100 p-3 rounded">
+                        <p class="text-gray-600">Bajo Umbral</p>
+                        <p class="text-xl font-bold text-gray-600">${results.below_threshold || 0}</p>
+                    </div>
+                </div>
+                ${dryRun ? '<p class="mt-3 text-sm text-yellow-800 bg-yellow-100 p-2 rounded"><i class="fas fa-info-circle mr-2"></i>Modo de prueba - ninguna IP fue bloqueada realmente</p>' : ''}
+            `;
+
+            resultsDiv.classList.remove('hidden');
+
+            if (!dryRun) {
+                await loadStats();
+            }
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error('Error processing predictions:', e);
+        showNotification('Error al procesar predicciones', 'error');
+    } finally {
+        document.getElementById('process-btn').disabled = false;
+        document.getElementById('process-btn').innerHTML = '<i class="fas fa-play mr-2"></i>Procesar';
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Implementación simple de notificación
+    const colors = {
+        'success': 'bg-green-500',
+        'error': 'bg-red-500',
+        'info': 'bg-blue-500'
+    };
+
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded shadow-lg z-50`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+</script>
+{% endblock %}

@@ -20,7 +20,7 @@ try:
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False
-    print("⚠️  SHAP no disponible. Instala con: pip install shap")
+    print("[WARN] SHAP no disponible. Instala con: pip install shap")
 
 
 class MLTrafficDetector:
@@ -1027,3 +1027,106 @@ class MLTrafficDetector:
                 continue
 
         return total_imported
+
+    def process_with_auto_blocker(self, auto_blocker, hours_back=24, min_confidence=0.6, dry_run=False):
+        """
+        Procesar predicciones ML con el sistema de auto-bloqueo
+
+        Args:
+            auto_blocker: Instancia de AutoBlocker
+            hours_back: Horas hacia atrás para analizar
+            min_confidence: Confianza mínima para considerar una IP (0.0 - 1.0)
+            dry_run: Si es True, solo evalúa sin bloquear
+
+        Returns:
+            dict: Resultados del procesamiento
+        """
+        print(f"\n{'='*70}")
+        print("PROCESAMIENTO ML CON AUTO-BLOQUEO")
+        print(f"{'='*70}")
+        print(f"Modo: {'DRY-RUN (Prueba)' if dry_run else 'PRODUCCIÓN (Bloqueará IPs)'}")
+        print(f"Período: últimas {hours_back} horas")
+        print(f"Confianza mínima: {min_confidence*100:.0f}%")
+
+        # 1. Obtener predicciones ML
+        print(f"\n[1/3] Obteniendo predicciones ML...")
+        suspicious_ips = self.get_suspicious_ips(
+            hours_back=hours_back,
+            min_confidence=min_confidence,
+            use_cache=True
+        )
+
+        if not suspicious_ips or len(suspicious_ips) == 0:
+            print(f"\n✅ No se encontraron IPs sospechosas por encima del umbral {min_confidence*100:.0f}%")
+            return {
+                'success': True,
+                'evaluated': 0,
+                'blocked': 0,
+                'already_blocked': 0,
+                'whitelisted': 0,
+                'below_threshold': 0,
+                'dry_run': dry_run,
+                'message': 'No hay IPs sospechosas para procesar'
+            }
+
+        print(f"✅ {len(suspicious_ips)} IPs sospechosas encontradas")
+
+        # 2. Convertir al formato esperado por auto_blocker
+        print(f"\n[2/3] Preparando predicciones para auto-blocker...")
+        predictions_data = []
+
+        for ip_info in suspicious_ips:
+            # Mapear severity usando threat_score
+            threat_score = ip_info.get('threat_score', 0)
+            if threat_score >= 90:
+                severity = 'critical'
+            elif threat_score >= 70:
+                severity = 'high'
+            elif threat_score >= 50:
+                severity = 'medium'
+            else:
+                severity = 'low'
+
+            prediction = {
+                'ip_address': ip_info['ip_address'],
+                'ml_confidence': ip_info['ml_confidence'],
+                'threat_score': threat_score,
+                'severity': severity,
+                'event_count': ip_info.get('total_events', 0),
+                'first_seen': ip_info.get('first_seen'),
+                'last_seen': ip_info.get('last_seen'),
+                'country': ip_info.get('country', 'Unknown'),
+                'reasons': ip_info.get('reasons', ''),
+                'behavioral_features': ip_info.get('behavioral_features', {}),
+                'recommended_action': ip_info.get('recommended_action', 'monitor')
+            }
+            predictions_data.append(prediction)
+
+        print(f"✅ {len(predictions_data)} predicciones preparadas")
+
+        # 3. Procesar con auto-blocker
+        print(f"\n[3/3] Procesando con auto-blocker...")
+        results = auto_blocker.process_ml_predictions(predictions_data, dry_run=dry_run)
+
+        # Mostrar resumen
+        print(f"\n{'='*70}")
+        print("RESULTADOS DEL PROCESAMIENTO")
+        print(f"{'='*70}")
+        print(f"IPs evaluadas: {results['evaluated']}")
+        print(f"IPs bloqueadas: {results['blocked']}" if not dry_run else f"IPs a bloquear: {results['blocked']}")
+        print(f"Ya bloqueadas: {results['already_blocked']}")
+        print(f"En whitelist: {results['whitelisted']}")
+        print(f"Bajo umbral: {results['below_threshold']}")
+
+        if dry_run:
+            print(f"\n⚠️  MODO DRY-RUN: Ninguna IP fue bloqueada realmente")
+            print(f"   Activa el modo producción para bloquear las IPs detectadas")
+        else:
+            print(f"\n✅ Procesamiento completado en modo PRODUCCIÓN")
+            if results['blocked'] > 0:
+                print(f"   {results['blocked']} IPs fueron bloqueadas automáticamente")
+
+        print(f"{'='*70}\n")
+
+        results['dry_run'] = dry_run
+        return results

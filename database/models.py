@@ -1288,3 +1288,71 @@ class TaskLog(Base):
             'message': self.message,
             'records_processed': self.records_processed
         }
+
+
+# ============================================================================
+# SISTEMA DE AUTO-BLOQUEO BASADO EN ML
+# ============================================================================
+
+class AutoBlockPolicy(Base):
+    """Políticas de auto-bloqueo basadas en ML"""
+    __tablename__ = 'auto_block_policies'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Información básica
+    policy_name = Column(String, unique=True, nullable=False, index=True)
+    description = Column(Text)
+
+    # Estado
+    enabled = Column(Boolean, default=False, index=True)
+
+    # Criterios de bloqueo
+    min_ml_confidence = Column(Float, default=85.0)  # % mínimo de confianza ML
+    min_threat_score = Column(Float, default=70.0)   # Threat score mínimo
+    min_severity = Column(String, default='high')    # 'low', 'medium', 'high', 'critical'
+    min_events = Column(Integer, default=3)          # Mínimo de eventos detectados
+
+    # Requerimientos adicionales
+    require_multiple_sources = Column(Boolean, default=True)  # Requerir 2+ fuentes (ML, Zeek, Fail2ban)
+
+    # Configuración de bloqueo
+    default_block_duration = Column(Integer, default=24)  # Horas
+    permanent_block = Column(Boolean, default=False)      # Bloqueo permanente
+    apply_to_fail2ban = Column(Boolean, default=True)     # Aplicar también en Fail2ban
+
+    # Excepciones
+    whitelist_enabled = Column(Boolean, default=True)    # Respetar whitelist
+    exclude_internal_ips = Column(Boolean, default=True)  # No bloquear IPs internas
+
+    # Estadísticas
+    total_blocks = Column(Integer, default=0)
+    last_block_at = Column(DateTime)
+
+    # Auditoría
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String)
+    updated_at = Column(DateTime)
+    updated_by = Column(String)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'policy_name': self.policy_name,
+            'description': self.description,
+            'enabled': self.enabled,
+            'min_ml_confidence': self.min_ml_confidence,
+            'min_threat_score': self.min_threat_score,
+            'min_severity': self.min_severity,
+            'min_events': self.min_events,
+            'require_multiple_sources': self.require_multiple_sources,
+            'default_block_duration': self.default_block_duration,
+            'permanent_block': self.permanent_block,
+            'apply_to_fail2ban': self.apply_to_fail2ban,
+            'whitelist_enabled': self.whitelist_enabled,
+            'exclude_internal_ips': self.exclude_internal_ips,
+            'total_blocks': self.total_blocks,
+            'last_block_at': self.last_block_at.isoformat() if self.last_block_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
