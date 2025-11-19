@@ -53,7 +53,45 @@
 ---
 
 ## FASE 2: DASHBOARD INTEGRADO ZEEK + ML (Semanas 3-4)
-**Estado:** Pendiente
+**Estado:** Completado ✅
+
+### Componentes Implementados
+
+#### Modulo de Analisis Integrado
+- [x] Crear `modules/integrated_analyzer.py` (450+ lineas)
+- [x] Implementar `get_top_threats()` - Top 10 IPs mas peligrosas con scoring
+- [x] Implementar `get_threat_map()` - Mapa de amenazas por pais
+- [x] Implementar `get_attack_timeline()` - Timeline de ataques
+- [x] Implementar `get_correlation_stats()` - Correlacion entre ML/Zeek/Fail2ban
+- [x] Implementar `get_dashboard_summary()` - Resumen completo
+- [x] Implementar `get_ip_details()` - Detalles de IP especifica
+
+#### API REST
+- [x] Crear `routes/integrated_routes.py` (250+ lineas)
+- [x] Endpoint GET `/integrated/api/summary` - Resumen general
+- [x] Endpoint GET `/integrated/api/top-threats` - Top IPs peligrosas
+- [x] Endpoint GET `/integrated/api/threat-map` - Mapa por pais
+- [x] Endpoint GET `/integrated/api/timeline` - Timeline de eventos
+- [x] Endpoint GET `/integrated/api/correlation` - Stats de correlacion
+- [x] Endpoint GET `/integrated/api/ip/<ip>` - Detalles de IP
+- [x] Endpoint GET `/integrated/api/export` - Exportar datos (CSV/JSON)
+
+#### Frontend
+- [x] Crear `templates/integrated_dashboard.html` (500+ lineas)
+- [x] Dashboard con 5 metricas principales
+- [x] Filtros de tiempo (6h, 24h, 3d, 7d)
+- [x] Grafico de timeline (Chart.js)
+- [x] Grafico de severidad (pie chart)
+- [x] Tabla top 10 IPs mas peligrosas
+- [x] Mapa de amenazas por pais
+- [x] Grafico de correlacion entre sistemas
+- [x] Modal con detalles de IP
+- [x] Exportacion de datos a CSV
+- [x] Auto-refresh cada 60 segundos
+
+#### Integracion
+- [x] Registrar blueprint en `app.py`
+- [x] Agregar menu "Dashboard Integrado" en `base.html`
 
 ---
 
@@ -70,13 +108,18 @@
 ## Progreso General
 
 - [x] Plan de implementación creado
-- [x] **FASE 1:** Sistema de Alertas (18/20 tareas completadas - 90%)
+- [x] **FASE 1:** Sistema de Alertas (18/20 tareas - 90% completado)
   - [x] Modelos de base de datos creados
   - [x] Migración ejecutada
   - [x] Módulo alert_manager.py creado
-  - [ ] Integraciones pendientes
-  - [ ] API y Frontend pendientes
-- [ ] **FASE 2:** Dashboard Integrado (0/x tareas)
+  - [x] Integraciones completadas (ML, Zeek, Fail2ban)
+  - [x] API y Frontend completados
+- [x] **FASE 2:** Dashboard Integrado (100% completado)
+  - [x] Modulo integrated_analyzer.py creado (450+ lineas)
+  - [x] 7 funciones de analisis implementadas
+  - [x] API REST completa (7 endpoints)
+  - [x] Dashboard web interactivo con graficos
+  - [x] Exportacion de datos CSV/JSON
 - [ ] **FASE 3:** Auto-Bloqueo ML (0/x tareas)
 - [ ] **FASE 4:** Métricas ML (0/x tareas)
 
@@ -126,3 +169,54 @@
 5. [OPCIONAL] Agregar mas canales (Telegram, Slack)
 
 **Ultima actualizacion:** 2025-11-19 23:15
+
+---
+
+## Resumen Final - Fase 2 Completada
+
+### Dashboard Integrado Zeek + ML (100%)
+
+**Archivos Creados (3):**
+1. `modules/integrated_analyzer.py` - Analizador integrado (450+ lineas)
+2. `routes/integrated_routes.py` - API REST (250+ lineas)
+3. `templates/integrated_dashboard.html` - Frontend (500+ lineas)
+
+**Archivos Modificados (2):**
+1. `app.py` - Registro de blueprint y analizador
+2. `templates/base.html` - Menu Dashboard Integrado
+
+**Funcionalidades Implementadas:**
+- ✅ Sistema de scoring de amenazas (ML + Zeek + Fail2ban)
+- ✅ Top 10 IPs mas peligrosas con scoring inteligente
+- ✅ Mapa de amenazas por pais con estadisticas
+- ✅ Timeline de ataques con graficos interactivos
+- ✅ Correlacion entre sistemas (diagrama de Venn)
+- ✅ Detalles completos de IPs con modal
+- ✅ Exportacion de datos (CSV y JSON)
+- ✅ Filtros de tiempo (6h, 24h, 3d, 7d)
+- ✅ Auto-refresh cada 60 segundos
+- ✅ Graficos con Chart.js (timeline, pie, bar)
+
+**Algoritmo de Scoring:**
+- ML confidence: 0-100 puntos
+- Zeek detections: 10 puntos cada una
+- Fail2ban bans: 20 puntos cada uno
+- Event severity: CRITICAL=50, HIGH=30, MEDIUM=10, LOW=5
+
+**API Endpoints (7):**
+1. GET `/integrated/api/summary` - Resumen general
+2. GET `/integrated/api/top-threats` - Top IPs peligrosas
+3. GET `/integrated/api/threat-map` - Mapa por pais
+4. GET `/integrated/api/timeline` - Timeline de eventos
+5. GET `/integrated/api/correlation` - Correlacion entre sistemas
+6. GET `/integrated/api/ip/<ip>` - Detalles de IP
+7. GET `/integrated/api/export` - Exportar CSV/JSON
+
+**Lineas de Codigo:** ~1200+
+
+**Proximos Pasos:**
+1. Testing del dashboard con datos reales
+2. Ajustar algoritmo de scoring segun necesidad
+3. [OPCIONAL] Agregar mas visualizaciones (mapa mundial)
+
+**Ultima actualizacion:** 2025-11-19 23:45

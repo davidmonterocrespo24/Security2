@@ -1,0 +1,502 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Integrado - ML + Zeek + Fail2ban{% endblock %}
+{% block header %}Dashboard Integrado{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Filtro de tiempo -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold">Periodo de Analisis</h3>
+            <div class="flex space-x-2">
+                <button onclick="changeTimeRange(6)" id="btn-6h" class="time-btn px-4 py-2 border rounded hover:bg-gray-100">6h</button>
+                <button onclick="changeTimeRange(24)" id="btn-24h" class="time-btn px-4 py-2 bg-blue-600 text-white rounded">24h</button>
+                <button onclick="changeTimeRange(72)" id="btn-72h" class="time-btn px-4 py-2 border rounded hover:bg-gray-100">3d</button>
+                <button onclick="changeTimeRange(168)" id="btn-168h" class="time-btn px-4 py-2 border rounded hover:bg-gray-100">7d</button>
+                <button onclick="refreshDashboard()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                    <i class="fas fa-sync mr-2"></i>Actualizar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metricas Generales -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Eventos Totales</p>
+                    <p id="stat-total" class="text-2xl font-bold">0</p>
+                </div>
+                <i class="fas fa-exclamation-triangle text-red-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">IPs Unicas</p>
+                    <p id="stat-ips" class="text-2xl font-bold">0</p>
+                </div>
+                <i class="fas fa-network-wired text-blue-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">ML Detections</p>
+                    <p id="stat-ml" class="text-2xl font-bold text-purple-600">0</p>
+                </div>
+                <i class="fas fa-brain text-purple-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Zeek Detections</p>
+                    <p id="stat-zeek" class="text-2xl font-bold text-green-600">0</p>
+                </div>
+                <i class="fas fa-shield-alt text-green-500 text-3xl"></i>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Fail2ban Bans</p>
+                    <p id="stat-f2b" class="text-2xl font-bold text-orange-600">0</p>
+                </div>
+                <i class="fas fa-ban text-orange-500 text-3xl"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graficos principales -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Timeline de Ataques -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4"><i class="fas fa-chart-line mr-2 text-blue-600"></i>Timeline de Ataques</h3>
+            <canvas id="timelineChart" height="250"></canvas>
+        </div>
+
+        <!-- Distribucion por Severidad -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4"><i class="fas fa-chart-pie mr-2 text-orange-600"></i>Distribucion por Severidad</h3>
+            <canvas id="severityChart" height="250"></canvas>
+        </div>
+    </div>
+
+    <!-- Top 10 IPs mas peligrosas -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold"><i class="fas fa-fire mr-2 text-red-600"></i>Top 10 IPs Mas Peligrosas</h3>
+            <button onclick="exportData('threats')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">
+                <i class="fas fa-file-export mr-2"></i>Exportar CSV
+            </button>
+        </div>
+        <div id="top-threats" class="overflow-x-auto"></div>
+    </div>
+
+    <!-- Mapa de Amenazas y Correlacion -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Mapa de Amenazas por Pais -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4"><i class="fas fa-globe mr-2 text-green-600"></i>Amenazas por Pais</h3>
+            <div id="threat-map" class="space-y-2 max-h-96 overflow-y-auto"></div>
+        </div>
+
+        <!-- Correlacion entre Sistemas -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4"><i class="fas fa-project-diagram mr-2 text-purple-600"></i>Correlacion entre Sistemas</h3>
+            <canvas id="correlationChart" height="300"></canvas>
+            <div id="correlation-stats" class="mt-4 text-sm text-gray-600"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Detalles de IP -->
+<div id="ipModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-screen overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-semibold" id="ip-modal-title">Detalles de IP</h3>
+            <button onclick="closeIPModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+        <div id="ip-modal-content" class="space-y-4"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let currentTimeRange = 24;
+let charts = {};
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadDashboard();
+    setInterval(() => loadDashboard(), 60000); // Auto-refresh cada minuto
+});
+
+function changeTimeRange(hours) {
+    currentTimeRange = hours;
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white');
+        btn.classList.add('border');
+    });
+    document.getElementById(`btn-${hours}h`).classList.add('bg-blue-600', 'text-white');
+    document.getElementById(`btn-${hours}h`).classList.remove('border');
+    loadDashboard();
+}
+
+function refreshDashboard() {
+    loadDashboard();
+    showNotification('Dashboard actualizado', 'success');
+}
+
+async function loadDashboard() {
+    await Promise.all([
+        loadSummary(),
+        loadTopThreats(),
+        loadTimeline(),
+        loadThreatMap(),
+        loadCorrelation()
+    ]);
+}
+
+async function loadSummary() {
+    try {
+        const res = await fetch(`/integrated/api/summary?hours_back=${currentTimeRange}`);
+        const data = await res.json();
+
+        if (data.success) {
+            const s = data.summary;
+            document.getElementById('stat-total').textContent = s.total_events || 0;
+            document.getElementById('stat-ips').textContent = s.unique_ips || 0;
+            document.getElementById('stat-ml').textContent = s.by_source?.ml || 0;
+            document.getElementById('stat-zeek').textContent = s.by_source?.zeek || 0;
+            document.getElementById('stat-f2b').textContent = s.by_source?.fail2ban || 0;
+
+            // Actualizar grafico de severidad
+            updateSeverityChart(s.severity_counts || {});
+        }
+    } catch (e) {
+        console.error('Error loading summary:', e);
+    }
+}
+
+async function loadTopThreats() {
+    try {
+        const res = await fetch(`/integrated/api/top-threats?hours_back=${currentTimeRange}&limit=10`);
+        const data = await res.json();
+
+        if (data.success) {
+            const container = document.getElementById('top-threats');
+            if (data.threats.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">No hay amenazas detectadas en este periodo</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="min-w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left">#</th>
+                            <th class="px-4 py-2 text-left">IP</th>
+                            <th class="px-4 py-2 text-left">Pais</th>
+                            <th class="px-4 py-2 text-right">Score</th>
+                            <th class="px-4 py-2 text-right">ML</th>
+                            <th class="px-4 py-2 text-right">Zeek</th>
+                            <th class="px-4 py-2 text-right">F2B</th>
+                            <th class="px-4 py-2 text-right">Eventos</th>
+                            <th class="px-4 py-2 text-left">Ultima Vez</th>
+                            <th class="px-4 py-2">Accion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.threats.map((t, i) => `
+                            <tr class="border-b hover:bg-gray-50">
+                                <td class="px-4 py-2">${i + 1}</td>
+                                <td class="px-4 py-2 font-mono text-sm">${t.ip}</td>
+                                <td class="px-4 py-2">${t.country || 'Unknown'}</td>
+                                <td class="px-4 py-2 text-right font-bold text-red-600">${t.score}</td>
+                                <td class="px-4 py-2 text-right">${t.ml_confidence}% (${t.ml_count})</td>
+                                <td class="px-4 py-2 text-right">${t.zeek_detections}</td>
+                                <td class="px-4 py-2 text-right">${t.fail2ban_bans}</td>
+                                <td class="px-4 py-2 text-right">${t.total_events}</td>
+                                <td class="px-4 py-2 text-sm">${t.last_seen ? new Date(t.last_seen).toLocaleString() : 'N/A'}</td>
+                                <td class="px-4 py-2">
+                                    <button onclick="showIPDetails('${t.ip}')" class="px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    } catch (e) {
+        console.error('Error loading top threats:', e);
+    }
+}
+
+async function loadTimeline() {
+    try {
+        const res = await fetch(`/integrated/api/timeline?hours_back=${currentTimeRange}&interval_minutes=60`);
+        const data = await res.json();
+
+        if (data.success && data.timeline.length > 0) {
+            const labels = data.timeline.map(t => t.timestamp);
+            const ml = data.timeline.map(t => t.ml_detections);
+            const zeek = data.timeline.map(t => t.zeek_detections);
+            const f2b = data.timeline.map(t => t.fail2ban_bans);
+
+            if (charts.timeline) charts.timeline.destroy();
+
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            charts.timeline = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {label: 'ML', data: ml, borderColor: '#9333ea', backgroundColor: 'rgba(147, 51, 234, 0.1)', tension: 0.4},
+                        {label: 'Zeek', data: zeek, borderColor: '#16a34a', backgroundColor: 'rgba(22, 163, 74, 0.1)', tension: 0.4},
+                        {label: 'Fail2ban', data: f2b, borderColor: '#f97316', backgroundColor: 'rgba(249, 115, 22, 0.1)', tension: 0.4}
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {legend: {position: 'top'}},
+                    scales: {y: {beginAtZero: true}}
+                }
+            });
+        }
+    } catch (e) {
+        console.error('Error loading timeline:', e);
+    }
+}
+
+function updateSeverityChart(severities) {
+    const data = [
+        severities.CRITICAL || 0,
+        severities.HIGH || 0,
+        severities.MEDIUM || 0,
+        severities.LOW || 0
+    ];
+
+    if (charts.severity) charts.severity.destroy();
+
+    const ctx = document.getElementById('severityChart').getContext('2d');
+    charts.severity = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Critical', 'High', 'Medium', 'Low'],
+            datasets: [{
+                data: data,
+                backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#10b981']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {legend: {position: 'right'}}
+        }
+    });
+}
+
+async function loadThreatMap() {
+    try {
+        const res = await fetch(`/integrated/api/threat-map?hours_back=${currentTimeRange}`);
+        const data = await res.json();
+
+        if (data.success) {
+            const container = document.getElementById('threat-map');
+            const countries = Object.entries(data.map).sort((a, b) => b[1].count - a[1].count).slice(0, 15);
+
+            if (countries.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-4">Sin datos</p>';
+                return;
+            }
+
+            container.innerHTML = countries.map(([country, info]) => `
+                <div class="flex items-center justify-between p-3 border rounded hover:bg-gray-50">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-2xl">${getCountryFlag(country)}</span>
+                        <div>
+                            <p class="font-semibold">${country}</p>
+                            <p class="text-sm text-gray-500">${info.unique_ips} IPs unicas</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold text-red-600">${info.count} eventos</p>
+                        <p class="text-sm text-gray-500">Score avg: ${info.avg_score}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Error loading threat map:', e);
+    }
+}
+
+async function loadCorrelation() {
+    try {
+        const res = await fetch(`/integrated/api/correlation?hours_back=${currentTimeRange}`);
+        const data = await res.json();
+
+        if (data.success) {
+            const c = data.correlation;
+
+            // Grafico Venn simplificado con barras
+            if (charts.correlation) charts.correlation.destroy();
+
+            const ctx = document.getElementById('correlationChart').getContext('2d');
+            charts.correlation = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Solo ML', 'Solo Zeek', 'Solo F2B', 'ML+Zeek', 'ML+F2B', 'Zeek+F2B', 'Los 3'],
+                    datasets: [{
+                        label: 'IPs Detectadas',
+                        data: [
+                            c.ml_unique - c.ml_and_zeek - c.ml_and_fail2ban + c.all_three,
+                            c.zeek_unique - c.ml_and_zeek - c.zeek_and_fail2ban + c.all_three,
+                            c.fail2ban_unique - c.ml_and_fail2ban - c.zeek_and_fail2ban + c.all_three,
+                            c.ml_and_zeek - c.all_three,
+                            c.ml_and_fail2ban - c.all_three,
+                            c.zeek_and_fail2ban - c.all_three,
+                            c.all_three
+                        ],
+                        backgroundColor: ['#9333ea', '#16a34a', '#f97316', '#6366f1', '#ec4899', '#14b8a6', '#ef4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {legend: {display: false}}
+                }
+            });
+
+            // Estadisticas textuales
+            document.getElementById('correlation-stats').innerHTML = `
+                <p><strong>IPs detectadas por los 3 sistemas:</strong> ${c.all_three}</p>
+                <p><strong>ML y Zeek coinciden:</strong> ${c.ml_and_zeek} IPs</p>
+                <p><strong>Total IPs unicas:</strong> ${c.ml_unique + c.zeek_unique + c.fail2ban_unique - c.ml_and_zeek - c.ml_and_fail2ban - c.zeek_and_fail2ban + c.all_three}</p>
+            `;
+        }
+    } catch (e) {
+        console.error('Error loading correlation:', e);
+    }
+}
+
+async function showIPDetails(ip) {
+    try {
+        const res = await fetch(`/integrated/api/ip/${ip}`);
+        const data = await res.json();
+
+        if (data.success) {
+            const details = data.ip_details;
+            document.getElementById('ip-modal-title').textContent = `Detalles de ${ip}`;
+
+            document.getElementById('ip-modal-content').innerHTML = `
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-gray-50 p-4 rounded">
+                        <h4 class="font-semibold mb-2">Informacion General</h4>
+                        <p><strong>IP:</strong> ${details.ip}</p>
+                        <p><strong>Pais:</strong> ${details.geolocation?.country || 'Unknown'}</p>
+                        <p><strong>Ciudad:</strong> ${details.geolocation?.city || 'Unknown'}</p>
+                        <p><strong>Eventos Totales:</strong> ${details.total_events}</p>
+                        <p><strong>Primera Vez:</strong> ${details.first_seen ? new Date(details.first_seen).toLocaleString() : 'N/A'}</p>
+                        <p><strong>Ultima Vez:</strong> ${details.last_seen ? new Date(details.last_seen).toLocaleString() : 'N/A'}</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded">
+                        <h4 class="font-semibold mb-2">Machine Learning</h4>
+                        <p><strong>Predicciones:</strong> ${details.ml_stats.total_predictions}</p>
+                        <p><strong>Confianza Promedio:</strong> ${(details.ml_stats.avg_confidence * 100).toFixed(2)}%</p>
+                        <p><strong>Confianza Maxima:</strong> ${(details.ml_stats.max_confidence * 100).toFixed(2)}%</p>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded">
+                    <h4 class="font-semibold mb-2">Tipos de Eventos</h4>
+                    <div class="grid grid-cols-3 gap-2">
+                        ${Object.entries(details.event_types).map(([type, count]) => `
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">${type}: ${count}</span>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded">
+                    <h4 class="font-semibold mb-2">Severidades</h4>
+                    <div class="flex space-x-2">
+                        ${Object.entries(details.severities).map(([sev, count]) => `
+                            <span class="px-3 py-1 rounded ${getSeverityClass(sev)}">${sev}: ${count}</span>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded">
+                    <h4 class="font-semibold mb-2">Eventos Recientes (ultimos 10)</h4>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        ${details.recent_events.map(e => `
+                            <div class="border-l-4 ${getSeverityBorder(e.severity)} bg-white p-2 rounded">
+                                <p class="text-sm font-semibold">${e.type}</p>
+                                <p class="text-xs text-gray-500">${new Date(e.timestamp).toLocaleString()}</p>
+                                <p class="text-xs">${e.details || 'Sin detalles'}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('ipModal').classList.remove('hidden');
+        }
+    } catch (e) {
+        console.error('Error loading IP details:', e);
+        showNotification('Error al cargar detalles de IP', 'error');
+    }
+}
+
+function closeIPModal() {
+    document.getElementById('ipModal').classList.add('hidden');
+}
+
+function getSeverityClass(severity) {
+    const classes = {
+        'CRITICAL': 'bg-red-100 text-red-800',
+        'HIGH': 'bg-orange-100 text-orange-800',
+        'MEDIUM': 'bg-yellow-100 text-yellow-800',
+        'LOW': 'bg-green-100 text-green-800'
+    };
+    return classes[severity] || 'bg-gray-100 text-gray-800';
+}
+
+function getSeverityBorder(severity) {
+    const borders = {
+        'critical': 'border-red-500',
+        'high': 'border-orange-500',
+        'medium': 'border-yellow-500',
+        'low': 'border-green-500'
+    };
+    return borders[severity.toLowerCase()] || 'border-gray-500';
+}
+
+function getCountryFlag(countryCode) {
+    // Simplificado - en produccion usar libreria de banderas
+    const flags = {
+        'CN': '🇨🇳', 'US': '🇺🇸', 'RU': '🇷🇺', 'BR': '🇧🇷', 'IN': '🇮🇳',
+        'DE': '🇩🇪', 'FR': '🇫🇷', 'GB': '🇬🇧', 'JP': '🇯🇵', 'KR': '🇰🇷',
+        'Unknown': '🏳️'
+    };
+    return flags[countryCode] || '🌐';
+}
+
+async function exportData(type) {
+    try {
+        const url = `/integrated/api/export?format=csv&hours_back=${currentTimeRange}&data_type=${type}`;
+        window.open(url, '_blank');
+        showNotification('Exportando datos...', 'success');
+    } catch (e) {
+        showNotification('Error al exportar', 'error');
+    }
+}
+</script>
+{% endblock %}

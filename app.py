@@ -115,6 +115,15 @@ from routes.alert_routes import create_alert_blueprint
 alert_blueprint = create_alert_blueprint(db_manager, alert_manager)
 app.register_blueprint(alert_blueprint)
 
+# Inicializar analizador integrado
+from modules.integrated_analyzer import IntegratedAnalyzer
+integrated_analyzer = IntegratedAnalyzer(db_manager)
+
+# Registrar blueprint de dashboard integrado
+from routes.integrated_routes import create_integrated_blueprint
+integrated_blueprint = create_integrated_blueprint(integrated_analyzer)
+app.register_blueprint(integrated_blueprint)
+
 # Iniciar worker de tareas en background
 task_scheduler.start_worker()
 
