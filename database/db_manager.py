@@ -121,7 +121,7 @@ class DatabaseManager:
                 SecurityEvent.source_ip,
                 func.count(SecurityEvent.id).label('count'),
                 func.max(SecurityEvent.severity).label('max_severity'),
-                func.max(SecurityEvent.country).label('country')
+                func.max(SecurityEvent.geo_location).label('geo_location')
             ).filter(
                 SecurityEvent.timestamp >= since
             ).group_by(SecurityEvent.source_ip).order_by(desc('count')).limit(10).all()
@@ -149,11 +149,11 @@ class DatabaseManager:
 
             # Estadísticas por país
             by_country_data = session.query(
-                SecurityEvent.country,
+                SecurityEvent.geo_location,
                 func.count(SecurityEvent.id)
             ).filter(
                 SecurityEvent.timestamp >= since
-            ).group_by(SecurityEvent.country).all()
+            ).group_by(SecurityEvent.geo_location).all()
 
             by_country = {}
             for country, count in by_country_data:
