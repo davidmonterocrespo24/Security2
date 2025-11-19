@@ -321,8 +321,9 @@ class ZeekManager:
             }
 
         try:
+            # Usar sudo con ruta completa
             result = subprocess.run(
-                [self.zeekctl_binary, 'status'],
+                ['sudo', self.zeekctl_binary, 'status'],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -378,13 +379,17 @@ class ZeekManager:
             }
 
         try:
+            # Si no se proporciona interfaz, usar la interfaz por defecto
+            if not interface:
+                interface = self.get_default_interface()
+
             # Si se proporciona interfaz, configurarla
             if interface:
                 self.configure_zeek(interface=interface)
 
-            # Deploy de configuración
+            # Deploy de configuración usando sudo con ruta completa
             result = subprocess.run(
-                [self.zeekctl_binary, 'deploy'],
+                ['sudo', self.zeekctl_binary, 'deploy'],
                 capture_output=True,
                 text=True,
                 timeout=60
@@ -428,8 +433,9 @@ class ZeekManager:
             }
 
         try:
+            # Usar sudo con ruta completa
             result = subprocess.run(
-                [self.zeekctl_binary, 'stop'],
+                ['sudo', self.zeekctl_binary, 'stop'],
                 capture_output=True,
                 text=True,
                 timeout=60
@@ -484,9 +490,9 @@ class ZeekManager:
         interfaces = []
 
         try:
-            # Usar 'ip addr' para listar interfaces
+            # Usar 'ip link show' para listar interfaces
             result = subprocess.run(
-                ['ip', 'addr', 'show'],
+                ['ip', 'link', 'show'],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -494,35 +500,79 @@ class ZeekManager:
 
             if result.returncode == 0:
                 lines = result.stdout.split('\n')
-                current_interface = None
 
                 for line in lines:
                     # Línea de interfaz: "2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> ..."
-                    if line and line[0].isdigit():
+                    if line and line[0].isdigit() and ':' in line:
                         parts = line.split(':')
                         if len(parts) >= 2:
                             iface_name = parts[1].strip()
-                            status = 'UP' if 'UP' in line else 'DOWN'
 
-                            current_interface = {
+                            # Filtrar interfaces especiales
+                            if iface_name in ['lo', 'docker0'] or iface_name.startswith('br-') or iface_name.startswith('veth'):
+                                continue
+
+                            status = 'UP' if 'UP' in line and 'LOWER_UP' in line else 'DOWN'
+
+                            interface = {
                                 'name': iface_name,
                                 'ip': None,
                                 'status': status
                             }
-                            interfaces.append(current_interface)
 
-                    # Línea de IP: "    inet 192.168.1.100/24 ..."
-                    elif 'inet ' in line and current_interface:
-                        parts = line.strip().split()
-                        if len(parts) >= 2:
-                            ip_with_mask = parts[1]
-                            ip = ip_with_mask.split('/')[0]
-                            current_interface['ip'] = ip
+                            # Obtener IP de la interfaz
+                            ip_result = subprocess.run(
+                                ['ip', 'addr', 'show', iface_name],
+                                capture_output=True,
+                                text=True,
+                                timeout=5
+                            )
+
+                            if ip_result.returncode == 0:
+                                for ip_line in ip_result.stdout.split('\n'):
+                                    if 'inet ' in ip_line and 'inet6' not in ip_line:
+                                        ip_parts = ip_line.strip().split()
+                                        if len(ip_parts) >= 2:
+                                            ip_with_mask = ip_parts[1]
+                                            interface['ip'] = ip_with_mask.split('/')[0]
+                                            break
+
+                            interfaces.append(interface)
 
         except Exception as e:
             print(f"Error obteniendo interfaces: {e}")
 
         return interfaces
+
+    def get_default_interface(self):
+        """
+        Obtener la interfaz de red principal (por defecto)
+
+        Returns:
+            str: Nombre de la interfaz (ej: eth0)
+        """
+        interfaces = self.get_interfaces()
+
+        # Filtrar interfaces UP con IP
+        active_interfaces = [
+            iface for iface in interfaces
+            if iface['status'] == 'UP' and iface['ip'] is not None
+        ]
+
+        # Preferir eth0, luego cualquier ethX, luego cualquier otra
+        for iface in active_interfaces:
+            if iface['name'] == 'eth0':
+                return 'eth0'
+
+        for iface in active_interfaces:
+            if iface['name'].startswith('eth'):
+                return iface['name']
+
+        # Si no hay eth, devolver la primera activa
+        if active_interfaces:
+            return active_interfaces[0]['name']
+
+        return None
 
     def configure_zeek(self, interface=None, log_dir=None, options=None):
         """
@@ -580,9 +630,18 @@ class ZeekManager:
                         else:
                             new_lines.append(line)
 
-                    # Escribir archivo
-                    with open(cfg_path, 'w') as f:
+                    # Escribir archivo usando sudo (requiere permisos)
+                    # Crear archivo temporal
+                    temp_file = '/tmp/node.cfg.tmp'
+                    with open(temp_file, 'w') as f:
                         f.writelines(new_lines)
+
+                    # Mover con sudo
+                    subprocess.run(
+                        ['sudo', 'mv', temp_file, cfg_path],
+                        capture_output=True,
+                        timeout=10
+                    )
 
                     return True
                 except Exception as e:
