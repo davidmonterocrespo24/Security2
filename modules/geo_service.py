@@ -1,49 +1,157 @@
 """
 Servicio de Geolocalización IP
 Permite identificar el país de origen de las IPs y filtrar acceso según configuración
+Usa GeoLite2 como fuente primaria y APIs públicas como fallback
 """
 import os
-import geoip2.database
-import geoip2.errors
-from typing import Optional, Dict, List
+import requests
+import time
+from typing import Optional, Dict, List, Tuple
 from datetime import datetime
 import json
 
+# Importar geoip2 opcionalmente
+try:
+    import geoip2.database
+    import geoip2.errors
+    GEOIP2_AVAILABLE = True
+except ImportError:
+    GEOIP2_AVAILABLE = False
+    print("[WARN] Modulo geoip2 no disponible. Se usaran solo APIs publicas.")
+
 
 class GeoLocationService:
-    """Servicio para geolocalización de IPs usando GeoLite2"""
+    """Servicio para geolocalización de IPs usando GeoLite2 y APIs públicas como fallback"""
 
-    def __init__(self, db_manager, geoip_db_path='data/GeoLite2-Country.mmdb'):
+    def __init__(self, db_manager, geoip_db_path='data/GeoLite2-Country.mmdb', use_api_fallback=True):
         """
         Inicializar servicio de geolocalización
 
         Args:
             db_manager: Instancia de DatabaseManager
             geoip_db_path: Ruta a la base de datos GeoLite2
+            use_api_fallback: Usar APIs públicas si GeoLite2 falla
         """
         self.db = db_manager
         self.geoip_db_path = geoip_db_path
         self.reader = None
+        self.use_api_fallback = use_api_fallback
+        self._api_cache: Dict[str, Tuple[str, str]] = {}
 
         # Intentar cargar la base de datos
         self._load_geoip_database()
 
     def _load_geoip_database(self):
         """Cargar la base de datos GeoIP2"""
+        if not GEOIP2_AVAILABLE:
+            print("[WARN] Modulo geoip2 no disponible. Se usaran APIs publicas.")
+            return
+
         try:
             if os.path.exists(self.geoip_db_path):
                 self.reader = geoip2.database.Reader(self.geoip_db_path)
-                print(f"✅ Base de datos GeoIP2 cargada: {self.geoip_db_path}")
+                print(f"[OK] Base de datos GeoIP2 cargada: {self.geoip_db_path}")
             else:
-                print(f"⚠️  Base de datos GeoIP2 no encontrada: {self.geoip_db_path}")
-                print("   Ejecuta 'python scripts/download_geoip_db.py' para descargarla")
+                print(f"[WARN] Base de datos GeoIP2 no encontrada: {self.geoip_db_path}")
+                print("      Se usaran APIs publicas como alternativa")
         except Exception as e:
-            print(f"❌ Error cargando base de datos GeoIP2: {e}")
+            print(f"[ERROR] Error cargando base de datos GeoIP2: {e}")
+            print("        Se usaran APIs publicas como alternativa")
             self.reader = None
+
+    def _query_ip_api_com(self, ip: str, timeout: int = 5) -> Optional[Tuple[str, str]]:
+        """
+        Consultar API de ip-api.com
+        Límite: 45 req/minuto para uso no comercial
+        """
+        try:
+            response = requests.get(
+                f'http://ip-api.com/json/{ip}?fields=country,countryCode',
+                timeout=timeout
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') != 'fail':
+                    country = data.get('country')
+                    code = data.get('countryCode')
+                    if country and code:
+                        return (country, code)
+        except Exception:
+            pass
+        return None
+
+    def _query_ipwhois_app(self, ip: str, timeout: int = 5) -> Optional[Tuple[str, str]]:
+        """
+        Consultar API de ipwhois.app
+        Límite: 10,000 req/mes para uso gratuito
+        """
+        try:
+            response = requests.get(
+                f'http://ipwhois.app/json/{ip}',
+                timeout=timeout
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    country = data.get('country')
+                    code = data.get('country_code')
+                    if country and code:
+                        return (country, code)
+        except Exception:
+            pass
+        return None
+
+    def _query_ipapi_co(self, ip: str, timeout: int = 5) -> Optional[Tuple[str, str]]:
+        """
+        Consultar API de ipapi.co
+        Límite: ~30,000 req/mes para uso gratuito
+        """
+        try:
+            response = requests.get(
+                f'https://ipapi.co/{ip}/json/',
+                timeout=timeout
+            )
+            if response.status_code == 200:
+                data = response.json()
+                country = data.get('country_name')
+                code = data.get('country_code')
+                if country and code:
+                    return (country, code)
+        except Exception:
+            pass
+        return None
+
+    def _get_country_from_apis(self, ip: str) -> Optional[Tuple[str, str]]:
+        """
+        Obtener país de IP usando APIs públicas con fallback automático
+        Returns: (country_name, country_code) o None si falla
+        """
+        # Verificar caché
+        if ip in self._api_cache:
+            return self._api_cache[ip]
+
+        # Intentar APIs en orden de prioridad
+        apis = [
+            self._query_ip_api_com,      # Más rápida y confiable
+            self._query_ipwhois_app,     # Sin límites estrictos
+            self._query_ipapi_co,        # Backup
+        ]
+
+        for api_func in apis:
+            result = api_func(ip)
+            if result:
+                # Guardar en caché
+                self._api_cache[ip] = result
+                return result
+            # Pequeña pausa entre intentos
+            time.sleep(0.5)
+
+        return None
 
     def get_country_info(self, ip_address: str) -> Optional[Dict]:
         """
         Obtener información del país para una IP
+        Usa GeoLite2 como fuente primaria y APIs públicas como fallback
 
         Args:
             ip_address: Dirección IP a consultar
@@ -57,36 +165,51 @@ class GeoLocationService:
                 'continent_name': 'North America'
             }
         """
-        if not self.reader:
-            return None
-
         # IPs privadas o locales
         if self._is_private_ip(ip_address):
             return {
-                'country_code': 'XX',
-                'country_name': 'Private/Local Network',
+                'country_code': 'LAN',
+                'country_name': 'Private Network',
                 'continent_code': 'XX',
                 'continent_name': 'Private'
             }
 
-        try:
-            response = self.reader.country(ip_address)
-            return {
-                'country_code': response.country.iso_code or 'XX',
-                'country_name': response.country.name or 'Unknown',
-                'continent_code': response.continent.code or 'XX',
-                'continent_name': response.continent.name or 'Unknown'
-            }
-        except geoip2.errors.AddressNotFoundError:
-            return {
-                'country_code': 'XX',
-                'country_name': 'Unknown',
-                'continent_code': 'XX',
-                'continent_name': 'Unknown'
-            }
-        except Exception as e:
-            print(f"Error obteniendo información de país para {ip_address}: {e}")
-            return None
+        # Intentar primero con GeoLite2 si está disponible
+        if self.reader and GEOIP2_AVAILABLE:
+            try:
+                response = self.reader.country(ip_address)
+                return {
+                    'country_code': response.country.iso_code or 'XX',
+                    'country_name': response.country.name or 'Unknown',
+                    'continent_code': response.continent.code or 'XX',
+                    'continent_name': response.continent.name or 'Unknown'
+                }
+            except Exception as e:
+                # Si GeoLite2 falla, intentar con APIs públicas
+                if self.use_api_fallback:
+                    print(f"[GeoService] GeoLite2 falló para {ip_address}, intentando APIs...")
+                else:
+                    return None
+
+        # Fallback a APIs públicas
+        if self.use_api_fallback:
+            api_result = self._get_country_from_apis(ip_address)
+            if api_result:
+                country_name, country_code = api_result
+                return {
+                    'country_code': country_code,
+                    'country_name': country_name,
+                    'continent_code': 'XX',  # APIs no proveen continente
+                    'continent_name': 'Unknown'
+                }
+
+        # No se pudo obtener información
+        return {
+            'country_code': 'XX',
+            'country_name': 'Unknown',
+            'continent_code': 'XX',
+            'continent_name': 'Unknown'
+        }
 
     def _is_private_ip(self, ip_address: str) -> bool:
         """Verificar si una IP es privada o local"""
@@ -245,6 +368,14 @@ class GeoLocationService:
             event_data['continent_code'] = country_info['continent_code']
 
         return event_data
+
+    def clear_cache(self):
+        """Limpiar caché de IPs consultadas por API"""
+        self._api_cache.clear()
+
+    def get_cache_size(self) -> int:
+        """Obtener número de IPs en caché de APIs"""
+        return len(self._api_cache)
 
     def __del__(self):
         """Cerrar la base de datos GeoIP al destruir el objeto"""
