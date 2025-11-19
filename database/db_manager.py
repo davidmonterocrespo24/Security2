@@ -960,8 +960,23 @@ class DatabaseManager:
                 existing.anomaly_events = prediction_data.get('anomaly_events', 0)
                 existing.country = prediction_data.get('country', 'Unknown')
                 existing.country_code = prediction_data.get('country_code', 'XX')
-                existing.first_seen = prediction_data.get('first_seen')
-                existing.last_seen = prediction_data.get('last_seen')
+
+                # Convertir fechas a objetos datetime si vienen como strings
+                first_seen = prediction_data.get('first_seen')
+                if first_seen and isinstance(first_seen, str):
+                    try:
+                        first_seen = datetime.fromisoformat(first_seen.replace('Z', '+00:00'))
+                    except:
+                        first_seen = None
+                existing.first_seen = first_seen
+
+                last_seen = prediction_data.get('last_seen')
+                if last_seen and isinstance(last_seen, str):
+                    try:
+                        last_seen = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+                    except:
+                        last_seen = None
+                existing.last_seen = last_seen
                 existing.reasons = prediction_data.get('reasons', '')
                 existing.recommended_action = prediction_data.get('recommended_action', 'monitor')
                 existing.is_blocked = prediction_data.get('is_blocked', False)
@@ -977,6 +992,26 @@ class DatabaseManager:
                 existing.is_bot = prediction_data.get('is_bot', False)
             else:
                 # Crear nueva predicción
+
+                # Convertir fechas a objetos datetime si vienen como strings
+                first_seen = prediction_data.get('first_seen')
+                if first_seen and isinstance(first_seen, str):
+                    try:
+                        first_seen = datetime.fromisoformat(first_seen.replace('Z', '+00:00'))
+                    except:
+                        first_seen = datetime.utcnow()
+                elif not first_seen:
+                    first_seen = datetime.utcnow()
+
+                last_seen = prediction_data.get('last_seen')
+                if last_seen and isinstance(last_seen, str):
+                    try:
+                        last_seen = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+                    except:
+                        last_seen = datetime.utcnow()
+                elif not last_seen:
+                    last_seen = datetime.utcnow()
+
                 prediction = MLPrediction(
                     ip_address=ip_address,
                     ml_confidence=prediction_data.get('ml_confidence', 0.0),
@@ -987,8 +1022,8 @@ class DatabaseManager:
                     anomaly_events=prediction_data.get('anomaly_events', 0),
                     country=prediction_data.get('country', 'Unknown'),
                     country_code=prediction_data.get('country_code', 'XX'),
-                    first_seen=prediction_data.get('first_seen'),
-                    last_seen=prediction_data.get('last_seen'),
+                    first_seen=first_seen,
+                    last_seen=last_seen,
                     reasons=prediction_data.get('reasons', ''),
                     recommended_action=prediction_data.get('recommended_action', 'monitor'),
                     is_blocked=prediction_data.get('is_blocked', False),
