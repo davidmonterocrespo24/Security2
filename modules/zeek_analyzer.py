@@ -54,9 +54,94 @@ class ZeekLogParser:
         return events
 
     @staticmethod
+    def parse_tsv_log(log_file_path, limit=None):
+        """
+        Parsear archivo de log TSV de Zeek (formato por defecto)
+
+        Args:
+            log_file_path: Ruta al archivo .log
+            limit: Número máximo de líneas a leer
+
+        Returns:
+            list: Lista de eventos parseados como diccionarios
+        """
+        events = []
+
+        if not os.path.exists(log_file_path):
+            return events
+
+        try:
+            with open(log_file_path, 'r') as f:
+                fields = []
+                separator = '\t'
+
+                count = 0
+                for line in f:
+                    line = line.strip()
+
+                    # Parsear metadatos
+                    if line.startswith('#separator'):
+                        # Formato: #separator \x09
+                        parts = line.split(None, 1)
+                        if len(parts) > 1:
+                            sep_value = parts[1]
+                            # Decodificar secuencias de escape como \x09
+                            try:
+                                separator = sep_value.encode().decode('unicode_escape')
+                            except:
+                                separator = '\t'
+                        continue
+                    elif line.startswith('#fields'):
+                        # Formato: #fields ts uid id.orig_h ...
+                        fields = line.split(separator)[1:]  # Saltar '#fields'
+                        continue
+                    elif line.startswith('#') or not line:
+                        # Saltar otros comentarios y líneas vacías
+                        continue
+
+                    # Parsear línea de datos
+                    if not fields:
+                        continue
+
+                    if limit and count >= limit:
+                        break
+
+                    values = line.split(separator)
+
+                    # Crear diccionario con campos
+                    event = {}
+                    for i, field in enumerate(fields):
+                        if i < len(values):
+                            value = values[i]
+                            # Convertir valores especiales
+                            if value == '-':
+                                event[field] = None
+                            elif value == '(empty)':
+                                event[field] = ''
+                            elif value == 'T':
+                                event[field] = True
+                            elif value == 'F':
+                                event[field] = False
+                            else:
+                                event[field] = value
+
+                    events.append(event)
+                    count += 1
+
+        except Exception as e:
+            print(f"Error leyendo {log_file_path}: {e}")
+
+        return events
+
+    @staticmethod
     def parse_conn_log(log_file_path, limit=None):
         """Parsear conn.log (conexiones)"""
-        events = ZeekLogParser.parse_json_log(log_file_path, limit)
+        # Intentar TSV primero (formato por defecto de Zeek)
+        events = ZeekLogParser.parse_tsv_log(log_file_path, limit)
+
+        # Si no hay eventos, intentar JSON
+        if not events:
+            events = ZeekLogParser.parse_json_log(log_file_path, limit)
 
         connections = []
         for event in events:
@@ -86,7 +171,10 @@ class ZeekLogParser:
     @staticmethod
     def parse_dns_log(log_file_path, limit=None):
         """Parsear dns.log (queries DNS)"""
-        events = ZeekLogParser.parse_json_log(log_file_path, limit)
+        # Intentar TSV primero
+        events = ZeekLogParser.parse_tsv_log(log_file_path, limit)
+        if not events:
+            events = ZeekLogParser.parse_json_log(log_file_path, limit)
 
         dns_queries = []
         for event in events:
@@ -114,7 +202,10 @@ class ZeekLogParser:
     @staticmethod
     def parse_ssl_log(log_file_path, limit=None):
         """Parsear ssl.log (conexiones SSL/TLS)"""
-        events = ZeekLogParser.parse_json_log(log_file_path, limit)
+        # Intentar TSV primero
+        events = ZeekLogParser.parse_tsv_log(log_file_path, limit)
+        if not events:
+            events = ZeekLogParser.parse_json_log(log_file_path, limit)
 
         ssl_conns = []
         for event in events:
@@ -145,7 +236,10 @@ class ZeekLogParser:
     @staticmethod
     def parse_http_log(log_file_path, limit=None):
         """Parsear http.log (tráfico HTTP)"""
-        events = ZeekLogParser.parse_json_log(log_file_path, limit)
+        # Intentar TSV primero
+        events = ZeekLogParser.parse_tsv_log(log_file_path, limit)
+        if not events:
+            events = ZeekLogParser.parse_json_log(log_file_path, limit)
 
         http_requests = []
         for event in events:
@@ -174,7 +268,10 @@ class ZeekLogParser:
     @staticmethod
     def parse_files_log(log_file_path, limit=None):
         """Parsear files.log (archivos transferidos)"""
-        events = ZeekLogParser.parse_json_log(log_file_path, limit)
+        # Intentar TSV primero
+        events = ZeekLogParser.parse_tsv_log(log_file_path, limit)
+        if not events:
+            events = ZeekLogParser.parse_json_log(log_file_path, limit)
 
         files = []
         for event in events:
@@ -201,7 +298,10 @@ class ZeekLogParser:
     @staticmethod
     def parse_notice_log(log_file_path, limit=None):
         """Parsear notice.log (alertas de Zeek)"""
-        events = ZeekLogParser.parse_json_log(log_file_path, limit)
+        # Intentar TSV primero
+        events = ZeekLogParser.parse_tsv_log(log_file_path, limit)
+        if not events:
+            events = ZeekLogParser.parse_json_log(log_file_path, limit)
 
         notices = []
         for event in events:
