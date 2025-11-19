@@ -60,38 +60,38 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
             # Aplicar filtro si existe
             if enabled_filter is not None:
                 enabled_bool = enabled_filter.lower() == 'true'
-                policies = [p for p in policies if p.enabled == enabled_bool]
+                policies = [p for p in policies if p['enabled'] == enabled_bool]
 
             # Formatear respuesta
             policies_data = []
             for policy in policies:
                 policies_data.append({
-                    'id': policy.id,
-                    'policy_name': policy.policy_name,
-                    'description': policy.description,
-                    'enabled': policy.enabled,
+                    'id': policy['id'],
+                    'policy_name': policy['policy_name'],
+                    'description': policy['description'],
+                    'enabled': policy['enabled'],
                     'criteria': {
-                        'min_ml_confidence': policy.min_ml_confidence,
-                        'min_threat_score': policy.min_threat_score,
-                        'min_severity': policy.min_severity,
-                        'min_events': policy.min_events,
-                        'require_multiple_sources': policy.require_multiple_sources
+                        'min_ml_confidence': policy['min_ml_confidence'],
+                        'min_threat_score': policy['min_threat_score'],
+                        'min_severity': policy['min_severity'],
+                        'min_events': policy['min_events'],
+                        'require_multiple_sources': policy['require_multiple_sources']
                     },
                     'block_config': {
-                        'default_block_duration': policy.default_block_duration,
-                        'permanent_block': policy.permanent_block,
-                        'apply_to_fail2ban': policy.apply_to_fail2ban,
-                        'whitelist_enabled': policy.whitelist_enabled,
-                        'exclude_internal_ips': policy.exclude_internal_ips
+                        'default_block_duration': policy['default_block_duration'],
+                        'permanent_block': policy['permanent_block'],
+                        'apply_to_fail2ban': policy['apply_to_fail2ban'],
+                        'whitelist_enabled': policy['whitelist_enabled'],
+                        'exclude_internal_ips': policy['exclude_internal_ips']
                     },
                     'statistics': {
-                        'total_blocks': policy.total_blocks,
-                        'last_block_at': policy.last_block_at.isoformat() if policy.last_block_at else None
+                        'total_blocks': policy['total_blocks'],
+                        'last_block_at': policy['last_block_at']
                     },
-                    'created_at': policy.created_at.isoformat() if policy.created_at else None,
-                    'created_by': policy.created_by,
-                    'updated_at': policy.updated_at.isoformat() if policy.updated_at else None,
-                    'updated_by': policy.updated_by
+                    'created_at': policy['created_at'],
+                    'created_by': policy.get('created_by'),
+                    'updated_at': policy['updated_at'],
+                    'updated_by': policy.get('updated_by')
                 })
 
             return jsonify({
@@ -121,7 +121,7 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
         """
         try:
             policies = db_manager.get_auto_block_policies()
-            policy = next((p for p in policies if p.id == policy_id), None)
+            policy = next((p for p in policies if p['id'] == policy_id), None)
 
             if not policy:
                 return jsonify({
@@ -132,32 +132,32 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
             return jsonify({
                 'success': True,
                 'policy': {
-                    'id': policy.id,
-                    'policy_name': policy.policy_name,
-                    'description': policy.description,
-                    'enabled': policy.enabled,
+                    'id': policy['id'],
+                    'policy_name': policy['policy_name'],
+                    'description': policy['description'],
+                    'enabled': policy['enabled'],
                     'criteria': {
-                        'min_ml_confidence': policy.min_ml_confidence,
-                        'min_threat_score': policy.min_threat_score,
-                        'min_severity': policy.min_severity,
-                        'min_events': policy.min_events,
-                        'require_multiple_sources': policy.require_multiple_sources
+                        'min_ml_confidence': policy['min_ml_confidence'],
+                        'min_threat_score': policy['min_threat_score'],
+                        'min_severity': policy['min_severity'],
+                        'min_events': policy['min_events'],
+                        'require_multiple_sources': policy['require_multiple_sources']
                     },
                     'block_config': {
-                        'default_block_duration': policy.default_block_duration,
-                        'permanent_block': policy.permanent_block,
-                        'apply_to_fail2ban': policy.apply_to_fail2ban,
-                        'whitelist_enabled': policy.whitelist_enabled,
-                        'exclude_internal_ips': policy.exclude_internal_ips
+                        'default_block_duration': policy['default_block_duration'],
+                        'permanent_block': policy['permanent_block'],
+                        'apply_to_fail2ban': policy['apply_to_fail2ban'],
+                        'whitelist_enabled': policy['whitelist_enabled'],
+                        'exclude_internal_ips': policy['exclude_internal_ips']
                     },
                     'statistics': {
-                        'total_blocks': policy.total_blocks,
-                        'last_block_at': policy.last_block_at.isoformat() if policy.last_block_at else None
+                        'total_blocks': policy['total_blocks'],
+                        'last_block_at': policy['last_block_at']
                     },
-                    'created_at': policy.created_at.isoformat() if policy.created_at else None,
-                    'created_by': policy.created_by,
-                    'updated_at': policy.updated_at.isoformat() if policy.updated_at else None,
-                    'updated_by': policy.updated_by
+                    'created_at': policy['created_at'],
+                    'created_by': policy.get('created_by'),
+                    'updated_at': policy['updated_at'],
+                    'updated_by': policy.get('updated_by')
                 }
             })
 
@@ -278,7 +278,7 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
 
             # Verificar que la política existe
             policies = db_manager.get_auto_block_policies()
-            policy = next((p for p in policies if p.id == policy_id), None)
+            policy = next((p for p in policies if p['id'] == policy_id), None)
 
             if not policy:
                 return jsonify({
@@ -325,7 +325,7 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
         try:
             # Verificar que la política existe
             policies = db_manager.get_auto_block_policies()
-            policy = next((p for p in policies if p.id == policy_id), None)
+            policy = next((p for p in policies if p['id'] == policy_id), None)
 
             if not policy:
                 return jsonify({
@@ -334,7 +334,7 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
                 }), 404
 
             # No permitir eliminar política activa
-            if policy.enabled:
+            if policy['enabled']:
                 return jsonify({
                     'success': False,
                     'error': 'No se puede eliminar una política activa. Desactívala primero.'
@@ -384,7 +384,7 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
 
             # Verificar que la política existe
             policies = db_manager.get_auto_block_policies()
-            policy = next((p for p in policies if p.id == policy_id), None)
+            policy = next((p for p in policies if p['id'] == policy_id), None)
 
             if not policy:
                 return jsonify({
@@ -396,8 +396,8 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
             # (solo una política puede estar activa a la vez)
             if enabled:
                 for p in policies:
-                    if p.enabled and p.id != policy_id:
-                        db_manager.enable_auto_block_policy(p.id, False)
+                    if p['enabled'] and p['id'] != policy_id:
+                        db_manager.enable_auto_block_policy(p['id'], False)
 
             # Activar/desactivar política
             db_manager.enable_auto_block_policy(policy_id, enabled)
@@ -447,27 +447,27 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
             return jsonify({
                 'success': True,
                 'policy': {
-                    'id': policy.id,
-                    'policy_name': policy.policy_name,
-                    'description': policy.description,
-                    'enabled': policy.enabled,
+                    'id': policy['id'],
+                    'policy_name': policy['policy_name'],
+                    'description': policy['description'],
+                    'enabled': policy['enabled'],
                     'criteria': {
-                        'min_ml_confidence': policy.min_ml_confidence,
-                        'min_threat_score': policy.min_threat_score,
-                        'min_severity': policy.min_severity,
-                        'min_events': policy.min_events,
-                        'require_multiple_sources': policy.require_multiple_sources
+                        'min_ml_confidence': policy['min_ml_confidence'],
+                        'min_threat_score': policy['min_threat_score'],
+                        'min_severity': policy['min_severity'],
+                        'min_events': policy['min_events'],
+                        'require_multiple_sources': policy['require_multiple_sources']
                     },
                     'block_config': {
-                        'default_block_duration': policy.default_block_duration,
-                        'permanent_block': policy.permanent_block,
-                        'apply_to_fail2ban': policy.apply_to_fail2ban,
-                        'whitelist_enabled': policy.whitelist_enabled,
-                        'exclude_internal_ips': policy.exclude_internal_ips
+                        'default_block_duration': policy['default_block_duration'],
+                        'permanent_block': policy['permanent_block'],
+                        'apply_to_fail2ban': policy['apply_to_fail2ban'],
+                        'whitelist_enabled': policy['whitelist_enabled'],
+                        'exclude_internal_ips': policy['exclude_internal_ips']
                     },
                     'statistics': {
-                        'total_blocks': policy.total_blocks,
-                        'last_block_at': policy.last_block_at.isoformat() if policy.last_block_at else None
+                        'total_blocks': policy['total_blocks'],
+                        'last_block_at': policy['last_block_at']
                     }
                 }
             })
@@ -514,9 +514,9 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
             active_policy = db_manager.get_active_auto_block_policy()
             if active_policy:
                 stats['active_policy'] = {
-                    'id': active_policy.id,
-                    'name': active_policy.policy_name,
-                    'total_blocks': active_policy.total_blocks
+                    'id': active_policy['id'],
+                    'name': active_policy['policy_name'],
+                    'total_blocks': active_policy['total_blocks']
                 }
             else:
                 stats['active_policy'] = None
@@ -617,7 +617,7 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
                 'predictions_analyzed': len(predictions_data),
                 'hours_back': hours_back,
                 'dry_run': dry_run,
-                'policy_used': active_policy.policy_name if active_policy else 'none'
+                'policy_used': active_policy['policy_name'] if active_policy else 'none'
             })
 
         except Exception as e:
