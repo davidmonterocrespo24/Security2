@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Tareas Programadas{% endblock %}
+{% block header %}Tareas Programadas{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Botón para inicializar tareas de Zeek+ML -->
+    <div class="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg shadow-lg p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-2xl font-bold mb-2">🚀 Integración Zeek + Machine Learning</h3>
+                <p class="text-blue-100">Configura tareas automáticas para importación de logs, detección de amenazas y entrenamiento del modelo ML</p>
+            </div>
+            <button onclick="initZeekTasks()" class="px-6 py-3 bg-white text-blue-600 rounded-lg hover:bg-blue-50 font-semibold shadow-lg transition">
+                <i class="fas fa-magic mr-2"></i>
+                Inicializar Tareas
+            </button>
+        </div>
+    </div>
+
+    <!-- Lista de tareas -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold"><i class="fas fa-list mr-2 text-blue-600"></i> Tareas Activas</h3>
+            <button onclick="loadTasks()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                <i class="fas fa-sync-alt mr-2"></i> Actualizar
+            </button>
+        </div>
+
+        <div id="tasks-list" class="space-y-4">
+            <div class="text-center text-gray-500 py-8">
+                <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                <p>Cargando tareas...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    loadTasks();
+});
+
+async function initZeekTasks() {
+    if (!confirm('¿Deseas crear las tareas automáticas de Zeek+ML?\n\n1. Importar logs cada 5 minutos\n2. Detectar amenazas cada 5 minutos\n3. Re-entrenar modelo ML diariamente')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/tasks/init-zeek-tasks', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('✅ Tareas creadas exitosamente', 'success');
+            loadTasks();
+        } else {
+            showNotification('❌ Error: ' + data.message, 'error');
+        }
+    } catch (error) {
+        showNotification('❌ Error de conexión', 'error');
+    }
+}
+
+async function loadTasks() {
+    try {
+        const response = await fetch('/tasks/api/tasks');
+        const data = await response.json();
+
+        const container = document.getElementById('tasks-list');
+
+        if (!data.success || data.tasks.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-inbox text-4xl mb-3"></i>
+                    <p>No hay tareas programadas</p>
+                    <p class="text-sm mt-2">Haz clic en "Inicializar Tareas" para comenzar</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = data.tasks.map(task => `
+            <div class="border rounded-lg p-4 ${task.is_enabled ? 'border-green-300 bg-green-50' : 'border-gray-300'}">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3">
+                            <h4 class="font-semibold text-lg">${task.task_name}</h4>
+                            ${task.is_enabled ?
+                                '<span class="px-2 py-1 bg-green-500 text-white text-xs rounded">✓ Activa</span>' :
+                                '<span class="px-2 py-1 bg-gray-400 text-white text-xs rounded">Pausada</span>'
+                            }
+                            ${task.is_running ?
+                                '<span class="px-2 py-1 bg-blue-500 text-white text-xs rounded animate-pulse">▶ Ejecutando</span>' :
+                                ''
+                            }
+                        </div>
+                        <p class="text-sm text-gray-600 mt-1">${task.description}</p>
+                        <div class="flex gap-4 mt-2 text-sm text-gray-500">
+                            <span><i class="fas fa-clock mr-1"></i> ${getScheduleText(task)}</span>
+                            <span><i class="fas fa-check-circle mr-1"></i> ${task.successful_runs || 0} éxitos</span>
+                            <span><i class="fas fa-times-circle mr-1"></i> ${task.failed_runs || 0} errores</span>
+                            ${task.last_run ? `<span><i class="fas fa-history mr-1"></i> Última: ${formatDate(task.last_run)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="toggleTask(${task.id}, ${!task.is_enabled})" class="px-3 py-2 ${task.is_enabled ? 'bg-yellow-500' : 'bg-green-500'} text-white rounded hover:opacity-80">
+                            <i class="fas fa-${task.is_enabled ? 'pause' : 'play'}"></i>
+                        </button>
+                        <button onclick="executeTask(${task.id})" class="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            <i class="fas fa-bolt"></i> Ejecutar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        document.getElementById('tasks-list').innerHTML = `
+            <div class="text-center text-red-500 py-8">
+                <i class="fas fa-exclamation-triangle text-4xl mb-3"></i>
+                <p>Error cargando tareas</p>
+            </div>
+        `;
+    }
+}
+
+function getScheduleText(task) {
+    if (task.schedule_type === 'interval') {
+        return `Cada ${task.interval_minutes} minutos`;
+    } else if (task.schedule_type === 'daily') {
+        return `Diario a las ${task.hour}:${String(task.minute || 0).padStart(2, '0')}`;
+    } else if (task.schedule_type === 'hourly') {
+        return `Cada hora (minuto ${task.minute})`;
+    }
+    return 'Personalizado';
+}
+
+function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleString('es-ES', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+async function toggleTask(taskId, enable) {
+    try {
+        const response = await fetch(`/tasks/api/tasks/${taskId}/toggle`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ enabled: enable })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification(enable ? '✅ Tarea activada' : '⏸️ Tarea pausada', 'success');
+            loadTasks();
+        } else {
+            showNotification('❌ Error', 'error');
+        }
+    } catch (error) {
+        showNotification('❌ Error de conexión', 'error');
+    }
+}
+
+async function executeTask(taskId) {
+    try {
+        showNotification('⏳ Ejecutando tarea...', 'info');
+
+        const response = await fetch(`/tasks/api/tasks/${taskId}/execute`, {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('✅ Tarea ejecutada: ' + (data.result?.message || 'Completado'), 'success');
+            loadTasks();
+        } else {
+            showNotification('❌ Error: ' + data.message, 'error');
+        }
+    } catch (error) {
+        showNotification('❌ Error de conexión', 'error');
+    }
+}
+</script>
+{% endblock %}

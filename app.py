@@ -97,6 +97,18 @@ from routes.zeek_routes import create_zeek_blueprint
 zeek_blueprint = create_zeek_blueprint(zeek_manager, zeek_analyzer, zeek_detections)
 app.register_blueprint(zeek_blueprint)
 
+# Inicializar sistema de tareas programadas
+from modules.task_scheduler import TaskScheduler
+task_scheduler = TaskScheduler(db_manager)
+
+# Registrar blueprint de tareas programadas
+from routes.task_routes import create_task_blueprint
+task_blueprint = create_task_blueprint(task_scheduler)
+app.register_blueprint(task_blueprint)
+
+# Iniciar worker de tareas en background
+task_scheduler.start_worker()
+
 
 # ==================== MIDDLEWARE DE SEGURIDAD ====================
 
@@ -909,6 +921,66 @@ def get_ml_suggestions():
         'model_trained': True,
         'suggestions': suggestions,
         'total': len(suggestions)
+    })
+
+
+# --- Inicialización de tareas Zeek+ML ---
+@app.route('/api/tasks/init-zeek-tasks', methods=['POST'])
+@login_required
+def init_zeek_tasks():
+    """Crear tareas programadas para Zeek+ML automáticamente"""
+
+    # 1. Tarea: Importar logs de Zeek cada 5 minutos
+    task1 = task_scheduler.create_task({
+        'task_name': 'Zeek Log Import',
+        'description': 'Importar logs de Zeek a la base de datos cada 5 minutos',
+        'task_type': 'zeek_import',
+        'module_name': 'modules.zeek_analyzer',
+        'function_name': 'import_zeek_logs',
+        'function_params': {'limit': 1000},
+        'schedule_type': 'interval',
+        'interval_minutes': 5,
+        'is_enabled': True,
+        'created_by': current_user.username
+    })
+
+    # 2. Tarea: Detectar amenazas en datos de Zeek cada 5 minutos
+    task2 = task_scheduler.create_task({
+        'task_name': 'Zeek Threat Detection',
+        'description': 'Detectar port scans, DNS tunneling, beaconing y crear eventos automáticamente',
+        'task_type': 'zeek_detection',
+        'module_name': 'modules.zeek_ml_integration',
+        'function_name': 'zeek_auto_detect_and_create_events',
+        'function_params': {'hours_back': 1},
+        'schedule_type': 'interval',
+        'interval_minutes': 5,
+        'is_enabled': True,
+        'created_by': current_user.username
+    })
+
+    # 3. Tarea: Re-entrenar modelo ML diariamente a las 3 AM
+    task3 = task_scheduler.create_task({
+        'task_name': 'ML Model Training',
+        'description': 'Re-entrenar modelo ML con datos nuevos diariamente',
+        'task_type': 'ml_training',
+        'module_name': 'modules.ml_training',
+        'function_name': 'retrain_model_task',
+        'function_params': {},
+        'schedule_type': 'daily',
+        'hour': 3,
+        'minute': 0,
+        'is_enabled': True,
+        'created_by': current_user.username
+    })
+
+    return jsonify({
+        'success': True,
+        'message': 'Tareas de Zeek+ML creadas exitosamente',
+        'tasks_created': [
+            task1.get('task_id') if task1.get('success') else None,
+            task2.get('task_id') if task2.get('success') else None,
+            task3.get('task_id') if task3.get('success') else None
+        ]
     })
 
 
