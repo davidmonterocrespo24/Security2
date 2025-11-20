@@ -253,11 +253,16 @@ class MLMetrics:
             # Limitar puntos para el gráfico (máximo 100 puntos)
             step = max(1, len(fpr) // 100)
 
+            # Convertir a lista y reemplazar valores infinitos
+            fpr_list = [float(x) if not np.isinf(x) else (1.0 if x > 0 else 0.0) for x in fpr[::step]]
+            tpr_list = [float(x) if not np.isinf(x) else (1.0 if x > 0 else 0.0) for x in tpr[::step]]
+            thresh_list = [float(x) if not np.isinf(x) else (1.0 if x > 0 else 0.0) for x in thresholds[::step]]
+
             return {
-                'fpr': fpr[::step].tolist(),
-                'tpr': tpr[::step].tolist(),
-                'thresholds': thresholds[::step].tolist(),
-                'auc': float(roc_auc)
+                'fpr': fpr_list,
+                'tpr': tpr_list,
+                'thresholds': thresh_list,
+                'auc': float(roc_auc) if not np.isnan(roc_auc) else 0.5
             }
         except Exception as e:
             print(f"Error calculando curva ROC: {e}")
@@ -286,11 +291,21 @@ class MLMetrics:
             # Limitar puntos
             step = max(1, len(precision) // 100)
 
+            # Convertir a lista y reemplazar valores infinitos
+            prec_list = [float(x) if not np.isinf(x) and not np.isnan(x) else (1.0 if x > 0 else 0.0) for x in precision[::step]]
+            rec_list = [float(x) if not np.isinf(x) and not np.isnan(x) else (1.0 if x > 0 else 0.0) for x in recall[::step]]
+
+            # Los thresholds pueden tener un elemento menos que precision/recall
+            if len(thresholds) > 0:
+                thresh_list = [float(x) if not np.isinf(x) and not np.isnan(x) else (1.0 if x > 0 else 0.0) for x in thresholds[::step]]
+            else:
+                thresh_list = []
+
             return {
-                'precision': precision[::step].tolist(),
-                'recall': recall[::step].tolist(),
-                'thresholds': thresholds[::step].tolist() if len(thresholds) > 0 else [],
-                'auc': float(pr_auc)
+                'precision': prec_list,
+                'recall': rec_list,
+                'thresholds': thresh_list,
+                'auc': float(pr_auc) if not np.isnan(pr_auc) else 0.5
             }
         except Exception as e:
             print(f"Error calculando curva PR: {e}")
