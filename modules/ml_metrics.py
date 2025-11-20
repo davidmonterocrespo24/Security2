@@ -144,8 +144,9 @@ class MLMetrics:
                 event_dict = {
                     'timestamp': event.timestamp,
                     'severity': event.severity,
-                    'attack_vector': event.attack_type or 'unknown',
-                    'source_ip': event.source_ip
+                    'attack_vector': event.attack_vector or 'unknown',
+                    'source_ip': event.source_ip,
+                    'event_type': event.event_type
                 }
                 events_data.append(event_dict)
 
@@ -153,7 +154,8 @@ class MLMetrics:
                 is_malicious = (
                     event.severity in ['critical', 'high'] or
                     event.is_blocked or
-                    event.attack_type in ['brute_force', 'port_scan', 'sql_injection', 'ddos']
+                    event.event_type in ['brute_force', 'port_scan', 'sql_injection', 'ddos', 'malicious_traffic'] or
+                    (event.attack_vector and event.attack_vector in ['brute_force', 'port_scan', 'sql_injection', 'ddos'])
                 )
                 labels.append(1 if is_malicious else 0)
 
