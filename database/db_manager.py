@@ -23,9 +23,34 @@ class DatabaseManager:
     # ==================== EVENTOS DE SEGURIDAD ====================
 
     def log_security_event(self, event_type, severity, source_ip, **kwargs):
-        """Registrar evento de seguridad"""
+        """Registrar evento de seguridad con geolocalización automática"""
         session = self.get_session()
         try:
+            # Agregar geolocalización si no está presente y tenemos una IP válida
+            if 'geo_location' not in kwargs and source_ip:
+                try:
+                    # Intentar obtener geolocalización usando el servicio
+                    from modules.geo_service import GeoLocationService
+
+                    # Crear instancia del servicio (usa cache interno)
+                    if not hasattr(self, '_geo_service'):
+                        self._geo_service = GeoLocationService(self, use_api_fallback=True)
+
+                    geo_info = self._geo_service.get_location(source_ip)
+
+                    if geo_info:
+                        geo_data = {
+                            'country': geo_info.country,
+                            'country_code': geo_info.country_code,
+                            'city': geo_info.city,
+                            'latitude': geo_info.latitude,
+                            'longitude': geo_info.longitude
+                        }
+                        kwargs['geo_location'] = json.dumps(geo_data)
+                except Exception:
+                    # No fallar si la geolocalización falla
+                    pass
+
             event = SecurityEvent(
                 event_type=event_type,
                 severity=severity,
