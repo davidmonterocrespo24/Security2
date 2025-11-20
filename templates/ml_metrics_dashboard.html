@@ -1,0 +1,639 @@
+{% extends "base.html" %}
+{% block title %}Métricas del Modelo ML{% endblock %}
+{% block header %}Métricas del Modelo de Machine Learning{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header con acciones -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-2xl font-bold">Evaluación del Modelo ML</h2>
+                <p class="text-gray-600 mt-1">Monitoreo del rendimiento y métricas de clasificación</p>
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="refreshDashboard()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                    <i class="fas fa-sync mr-2"></i>Actualizar
+                </button>
+                <button onclick="evaluateModel()" id="evaluate-btn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    <i class="fas fa-chart-bar mr-2"></i>Evaluar Modelo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estado del Modelo -->
+    <div id="model-status" class="bg-blue-50 border-l-4 border-blue-500 rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <i class="fas fa-info-circle text-blue-600 text-2xl mr-3"></i>
+            <div>
+                <h3 class="text-lg font-bold text-blue-900">Cargando estado del modelo...</h3>
+                <p class="text-blue-800 text-sm">Obteniendo métricas actuales</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Métricas Principales -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Accuracy</p>
+                    <p id="metric-accuracy" class="text-3xl font-bold text-blue-600">-</p>
+                </div>
+                <i class="fas fa-check-circle text-blue-500 text-3xl"></i>
+            </div>
+            <div class="mt-2">
+                <div id="accuracy-bar" class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Precision</p>
+                    <p id="metric-precision" class="text-3xl font-bold text-green-600">-</p>
+                </div>
+                <i class="fas fa-bullseye text-green-500 text-3xl"></i>
+            </div>
+            <div class="mt-2">
+                <div id="precision-bar" class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-green-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">Recall</p>
+                    <p id="metric-recall" class="text-3xl font-bold text-purple-600">-</p>
+                </div>
+                <i class="fas fa-search text-purple-500 text-3xl"></i>
+            </div>
+            <div class="mt-2">
+                <div id="recall-bar" class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-purple-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">F1-Score</p>
+                    <p id="metric-f1" class="text-3xl font-bold text-orange-600">-</p>
+                </div>
+                <i class="fas fa-balance-scale text-orange-500 text-3xl"></i>
+            </div>
+            <div class="mt-2">
+                <div id="f1-bar" class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-orange-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">ROC AUC</p>
+                    <p id="metric-roc" class="text-3xl font-bold text-red-600">-</p>
+                </div>
+                <i class="fas fa-chart-area text-red-500 text-3xl"></i>
+            </div>
+            <div class="mt-2">
+                <div id="roc-bar" class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-red-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos Principales -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Matriz de Confusión -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4">
+                <i class="fas fa-th mr-2 text-blue-600"></i>Matriz de Confusión
+            </h3>
+            <div id="confusion-matrix" class="flex items-center justify-center min-h-80">
+                <p class="text-gray-500">No hay datos disponibles</p>
+            </div>
+        </div>
+
+        <!-- Curva ROC -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4">
+                <i class="fas fa-chart-line mr-2 text-red-600"></i>Curva ROC
+            </h3>
+            <div style="height: 320px;">
+                <canvas id="rocChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Curva Precision-Recall -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4">
+                <i class="fas fa-chart-line mr-2 text-purple-600"></i>Curva Precision-Recall
+            </h3>
+            <div style="height: 320px;">
+                <canvas id="prChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Feature Importance -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold mb-4">
+                <i class="fas fa-star mr-2 text-yellow-600"></i>Características Más Importantes
+            </h3>
+            <div style="height: 320px;">
+                <canvas id="featureChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evolución Temporal -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold mb-4">
+            <i class="fas fa-history mr-2 text-green-600"></i>Evolución Temporal de Métricas
+        </h3>
+        <div style="height: 300px;">
+            <canvas id="historyChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Tabla de Histórico -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold mb-4">
+            <i class="fas fa-list mr-2 text-blue-600"></i>Histórico de Evaluaciones
+        </h3>
+        <div id="history-table" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Versión</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Accuracy</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precision</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recall</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">F1-Score</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Muestras</th>
+                    </tr>
+                </thead>
+                <tbody id="history-tbody" class="bg-white divide-y divide-gray-200">
+                    <tr>
+                        <td colspan="7" class="px-6 py-4 text-center text-gray-500">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Cargando histórico...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let charts = {};
+let currentMetrics = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    refreshDashboard();
+});
+
+async function refreshDashboard() {
+    await Promise.all([
+        loadCurrentMetrics(),
+        loadHistory(),
+        loadFeatureImportance()
+    ]);
+}
+
+async function loadCurrentMetrics() {
+    try {
+        const res = await fetch('/ml-metrics/api/current');
+        const data = await res.json();
+
+        if (data.success && data.metrics) {
+            currentMetrics = data.metrics;
+            displayMetrics(data.metrics);
+            updateModelStatus(data.metrics);
+        } else {
+            updateModelStatus(null);
+        }
+    } catch (e) {
+        console.error('Error loading metrics:', e);
+        showNotification('Error al cargar métricas', 'error');
+    }
+}
+
+function displayMetrics(metrics) {
+    // Actualizar métricas principales
+    document.getElementById('metric-accuracy').textContent = (metrics.accuracy * 100).toFixed(1) + '%';
+    document.getElementById('metric-precision').textContent = (metrics.precision * 100).toFixed(1) + '%';
+    document.getElementById('metric-recall').textContent = (metrics.recall * 100).toFixed(1) + '%';
+    document.getElementById('metric-f1').textContent = (metrics.f1_score * 100).toFixed(1) + '%';
+    document.getElementById('metric-roc').textContent = (metrics.roc_auc || 0).toFixed(3);
+
+    // Actualizar barras de progreso
+    updateProgressBar('accuracy-bar', metrics.accuracy);
+    updateProgressBar('precision-bar', metrics.precision);
+    updateProgressBar('recall-bar', metrics.recall);
+    updateProgressBar('f1-bar', metrics.f1_score);
+    updateProgressBar('roc-bar', metrics.roc_auc || 0);
+}
+
+function updateProgressBar(id, value) {
+    const bar = document.getElementById(id);
+    if (bar) {
+        const fill = bar.querySelector('div');
+        fill.style.width = (value * 100) + '%';
+    }
+}
+
+function updateModelStatus(metrics) {
+    const statusDiv = document.getElementById('model-status');
+
+    if (!metrics) {
+        statusDiv.className = 'bg-yellow-50 border-l-4 border-yellow-500 rounded-lg shadow p-6';
+        statusDiv.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-exclamation-triangle text-yellow-600 text-2xl mr-3"></i>
+                <div>
+                    <h3 class="text-lg font-bold text-yellow-900">Modelo no evaluado</h3>
+                    <p class="text-yellow-800 text-sm">No hay métricas disponibles. Haga click en "Evaluar Modelo" para comenzar.</p>
+                </div>
+            </div>
+        `;
+    } else {
+        const accuracy = metrics.accuracy;
+        let statusClass, statusIcon, statusText, statusColor;
+
+        if (accuracy >= 0.9) {
+            statusClass = 'bg-green-50 border-green-500';
+            statusIcon = 'fa-check-circle';
+            statusText = 'Excelente';
+            statusColor = 'green';
+        } else if (accuracy >= 0.8) {
+            statusClass = 'bg-blue-50 border-blue-500';
+            statusIcon = 'fa-info-circle';
+            statusText = 'Bueno';
+            statusColor = 'blue';
+        } else if (accuracy >= 0.7) {
+            statusClass = 'bg-yellow-50 border-yellow-500';
+            statusIcon = 'fa-exclamation-triangle';
+            statusText = 'Aceptable';
+            statusColor = 'yellow';
+        } else {
+            statusClass = 'bg-red-50 border-red-500';
+            statusIcon = 'fa-times-circle';
+            statusText = 'Necesita Mejora';
+            statusColor = 'red';
+        }
+
+        const date = new Date(metrics.evaluated_at);
+        statusDiv.className = `${statusClass} border-l-4 rounded-lg shadow p-6`;
+        statusDiv.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <i class="fas ${statusIcon} text-${statusColor}-600 text-2xl mr-3"></i>
+                    <div>
+                        <h3 class="text-lg font-bold text-${statusColor}-900">Rendimiento del Modelo: ${statusText}</h3>
+                        <p class="text-${statusColor}-800 text-sm">
+                            Última evaluación: ${date.toLocaleString()} |
+                            Versión: ${metrics.model_version || 'N/A'} |
+                            Muestras: ${metrics.samples_evaluated || 0}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+async function loadHistory() {
+    try {
+        const res = await fetch('/ml-metrics/api/history?days=30&limit=10');
+        const data = await res.json();
+
+        if (data.success && data.history.length > 0) {
+            renderHistoryTable(data.history);
+            renderHistoryChart(data.history);
+
+            // Cargar detalles de la métrica más reciente para gráficos
+            if (data.history[0].id) {
+                await loadMetricDetails(data.history[0].id);
+            }
+        } else {
+            document.getElementById('history-tbody').innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-6 py-4 text-center text-gray-500">
+                        No hay histórico disponible
+                    </td>
+                </tr>
+            `;
+        }
+    } catch (e) {
+        console.error('Error loading history:', e);
+    }
+}
+
+function renderHistoryTable(history) {
+    const tbody = document.getElementById('history-tbody');
+    tbody.innerHTML = history.map(m => `
+        <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${new Date(m.evaluated_at).toLocaleString()}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${m.model_version || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">${(m.accuracy * 100).toFixed(1)}%</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${(m.precision * 100).toFixed(1)}%</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${(m.recall * 100).toFixed(1)}%</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${(m.f1_score * 100).toFixed(1)}%</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${m.samples_evaluated || 0}</td>
+        </tr>
+    `).join('');
+}
+
+function renderHistoryChart(history) {
+    const reversedHistory = [...history].reverse();
+
+    if (charts.history) charts.history.destroy();
+
+    const ctx = document.getElementById('historyChart').getContext('2d');
+    charts.history = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: reversedHistory.map(m => new Date(m.evaluated_at).toLocaleDateString()),
+            datasets: [
+                {
+                    label: 'Accuracy',
+                    data: reversedHistory.map(m => m.accuracy * 100),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: 'Precision',
+                    data: reversedHistory.map(m => m.precision * 100),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: 'Recall',
+                    data: reversedHistory.map(m => m.recall * 100),
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: 'F1-Score',
+                    data: reversedHistory.map(m => m.f1_score * 100),
+                    borderColor: '#f97316',
+                    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {display: true, text: 'Porcentaje (%)'}
+                }
+            },
+            plugins: {
+                legend: {position: 'bottom'}
+            }
+        }
+    });
+}
+
+async function loadMetricDetails(metricId) {
+    try {
+        const res = await fetch(`/ml-metrics/api/metrics/${metricId}`);
+        const data = await res.json();
+
+        if (data.success && data.metric) {
+            renderConfusionMatrix(data.metric);
+            renderROCCurve(data.metric);
+            renderPRCurve(data.metric);
+        }
+    } catch (e) {
+        console.error('Error loading metric details:', e);
+    }
+}
+
+function renderConfusionMatrix(metric) {
+    const cm = metric.extra_data?.confusion_matrix_labels || metric.confusion_matrix;
+
+    if (!cm || (Array.isArray(cm) && cm.length === 0)) {
+        document.getElementById('confusion-matrix').innerHTML = '<p class="text-gray-500">No disponible</p>';
+        return;
+    }
+
+    let tn, fp, fn, tp;
+
+    if (cm.tn !== undefined) {
+        tn = cm.tn; fp = cm.fp; fn = cm.fn; tp = cm.tp;
+    } else if (Array.isArray(cm) && cm.length === 2) {
+        tn = cm[0][0]; fp = cm[0][1]; fn = cm[1][0]; tp = cm[1][1];
+    } else {
+        document.getElementById('confusion-matrix').innerHTML = '<p class="text-gray-500">Formato inválido</p>';
+        return;
+    }
+
+    document.getElementById('confusion-matrix').innerHTML = `
+        <div class="grid grid-cols-2 gap-4 max-w-md mx-auto">
+            <div class="bg-green-100 border-2 border-green-500 rounded-lg p-6 text-center">
+                <p class="text-sm text-green-700 font-semibold">True Negatives</p>
+                <p class="text-4xl font-bold text-green-800">${tn}</p>
+            </div>
+            <div class="bg-red-100 border-2 border-red-500 rounded-lg p-6 text-center">
+                <p class="text-sm text-red-700 font-semibold">False Positives</p>
+                <p class="text-4xl font-bold text-red-800">${fp}</p>
+            </div>
+            <div class="bg-yellow-100 border-2 border-yellow-500 rounded-lg p-6 text-center">
+                <p class="text-sm text-yellow-700 font-semibold">False Negatives</p>
+                <p class="text-4xl font-bold text-yellow-800">${fn}</p>
+            </div>
+            <div class="bg-blue-100 border-2 border-blue-500 rounded-lg p-6 text-center">
+                <p class="text-sm text-blue-700 font-semibold">True Positives</p>
+                <p class="text-4xl font-bold text-blue-800">${tp}</p>
+            </div>
+        </div>
+    `;
+}
+
+function renderROCCurve(metric) {
+    const roc = metric.roc_curve_data;
+
+    if (!roc || !roc.fpr || !roc.tpr) {
+        return;
+    }
+
+    if (charts.roc) charts.roc.destroy();
+
+    const ctx = document.getElementById('rocChart').getContext('2d');
+    charts.roc = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: roc.fpr,
+            datasets: [
+                {
+                    label: `ROC Curve (AUC = ${(roc.auc || 0).toFixed(3)})`,
+                    data: roc.fpr.map((fpr, i) => ({x: fpr, y: roc.tpr[i]})),
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Random Classifier',
+                    data: [{x: 0, y: 0}, {x: 1, y: 1}],
+                    borderColor: '#94a3b8',
+                    borderDash: [5, 5],
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {title: {display: true, text: 'False Positive Rate'}},
+                y: {title: {display: true, text: 'True Positive Rate'}}
+            },
+            plugins: {
+                legend: {position: 'bottom'}
+            }
+        }
+    });
+}
+
+function renderPRCurve(metric) {
+    const pr = metric.pr_curve_data;
+
+    if (!pr || !pr.recall || !pr.precision) {
+        return;
+    }
+
+    if (charts.pr) charts.pr.destroy();
+
+    const ctx = document.getElementById('prChart').getContext('2d');
+    charts.pr = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: pr.recall,
+            datasets: [{
+                label: `PR Curve (AUC = ${(pr.auc || 0).toFixed(3)})`,
+                data: pr.recall.map((rec, i) => ({x: rec, y: pr.precision[i]})),
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                borderWidth: 2,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {title: {display: true, text: 'Recall'}},
+                y: {title: {display: true, text: 'Precision'}}
+            },
+            plugins: {
+                legend: {position: 'bottom'}
+            }
+        }
+    });
+}
+
+async function loadFeatureImportance() {
+    try {
+        const res = await fetch('/ml-metrics/api/feature-importance?top_n=15');
+        const data = await res.json();
+
+        if (data.success && data.features) {
+            renderFeatureImportance(data);
+        }
+    } catch (e) {
+        console.error('Error loading feature importance:', e);
+    }
+}
+
+function renderFeatureImportance(data) {
+    if (charts.feature) charts.feature.destroy();
+
+    const ctx = document.getElementById('featureChart').getContext('2d');
+    charts.feature = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.features,
+            datasets: [{
+                label: 'Importancia',
+                data: data.importances,
+                backgroundColor: '#f59e0b',
+                borderColor: '#d97706',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {title: {display: true, text: 'Importancia'}}
+            },
+            plugins: {
+                legend: {display: false}
+            }
+        }
+    });
+}
+
+async function evaluateModel() {
+    const btn = document.getElementById('evaluate-btn');
+    const originalHTML = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Evaluando...';
+
+    try {
+        const res = await fetch('/ml-metrics/api/evaluate', {method: 'POST'});
+        const data = await res.json();
+
+        if (data.success) {
+            showNotification('Modelo evaluado exitosamente', 'success');
+            await refreshDashboard();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error('Error evaluating model:', e);
+        showNotification('Error al evaluar modelo', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const colors = {
+        'success': 'bg-green-500',
+        'error': 'bg-red-500',
+        'info': 'bg-blue-500'
+    };
+
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded shadow-lg z-50`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+
+    setTimeout(() => notification.remove(), 3000);
+}
+</script>
+{% endblock %}

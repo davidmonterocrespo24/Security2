@@ -133,6 +133,15 @@ from routes.auto_block_routes import create_auto_block_blueprint
 auto_block_blueprint = create_auto_block_blueprint(db_manager, auto_blocker)
 app.register_blueprint(auto_block_blueprint)
 
+# Inicializar sistema de métricas ML
+from modules.ml_metrics import MLMetrics
+ml_metrics = MLMetrics(db_manager, ml_detector)
+
+# Registrar blueprint de métricas ML
+from routes.ml_metrics_routes import create_ml_metrics_blueprint
+ml_metrics_blueprint = create_ml_metrics_blueprint(ml_metrics)
+app.register_blueprint(ml_metrics_blueprint)
+
 # Iniciar worker de tareas en background
 task_scheduler.start_worker()
 

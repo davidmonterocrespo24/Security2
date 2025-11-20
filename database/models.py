@@ -1356,3 +1356,87 @@ class AutoBlockPolicy(Base):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+
+# ============================================================================
+# MÉTRICAS DEL MODELO ML
+# ============================================================================
+
+class MLModelMetrics(Base):
+    """Métricas y evaluación del modelo de Machine Learning"""
+    __tablename__ = 'ml_model_metrics'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Versión del modelo
+    model_version = Column(String, nullable=False, index=True)
+
+    # Timestamp de evaluación
+    evaluated_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Métricas de clasificación
+    accuracy = Column(Float, nullable=False)
+    precision = Column(Float, nullable=False)
+    recall = Column(Float, nullable=False)
+    f1_score = Column(Float, nullable=False)
+    roc_auc = Column(Float)
+
+    # Datos de evaluación
+    samples_evaluated = Column(Integer, default=0)
+
+    # Matriz de confusión (JSON)
+    confusion_matrix = Column(Text)  # [[tn, fp], [fn, tp]]
+
+    # Curvas (JSON)
+    roc_curve_data = Column(Text)  # {fpr: [], tpr: [], thresholds: []}
+    pr_curve_data = Column(Text)   # {precision: [], recall: [], thresholds: []}
+
+    # Metadata adicional (JSON)
+    extra_data = Column(Text)  # Información extra, feature importance, etc.
+
+    def to_dict(self):
+        # Parse JSON fields
+        cm = []
+        roc = {}
+        pr = {}
+        meta = {}
+
+        if self.confusion_matrix:
+            try:
+                cm = json.loads(self.confusion_matrix)
+            except:
+                pass
+
+        if self.roc_curve_data:
+            try:
+                roc = json.loads(self.roc_curve_data)
+            except:
+                pass
+
+        if self.pr_curve_data:
+            try:
+                pr = json.loads(self.pr_curve_data)
+            except:
+                pass
+
+        if self.extra_data:
+            try:
+                meta = json.loads(self.extra_data)
+            except:
+                pass
+
+        return {
+            'id': self.id,
+            'model_version': self.model_version,
+            'evaluated_at': self.evaluated_at.isoformat() if self.evaluated_at else None,
+            'accuracy': self.accuracy,
+            'precision': self.precision,
+            'recall': self.recall,
+            'f1_score': self.f1_score,
+            'roc_auc': self.roc_auc,
+            'samples_evaluated': self.samples_evaluated,
+            'confusion_matrix': cm,
+            'roc_curve_data': roc,
+            'pr_curve_data': pr,
+            'extra_data': meta
+        }
