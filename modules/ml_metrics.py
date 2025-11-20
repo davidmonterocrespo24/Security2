@@ -171,8 +171,27 @@ class MLMetrics:
                     df_features = features
 
                 # Seleccionar solo columnas numéricas
-                X = df_features.select_dtypes(include=[np.number]).values
+                df_numeric = df_features.select_dtypes(include=[np.number])
+
+                # Asegurar que tenemos las mismas columnas que el modelo entrenado
+                if self.ml_detector.feature_names:
+                    # Obtener las features que el modelo espera
+                    expected_features = self.ml_detector.feature_names
+
+                    # Agregar columnas faltantes con valor 0
+                    for feature in expected_features:
+                        if feature not in df_numeric.columns:
+                            df_numeric[feature] = 0
+
+                    # Reordenar columnas en el mismo orden que el modelo
+                    df_numeric = df_numeric[expected_features]
+
+                X = df_numeric.values
                 y = np.array(labels)
+
+                # Aplicar el scaler si existe
+                if self.ml_detector.scaler:
+                    X = self.ml_detector.scaler.transform(X)
 
                 if len(X) > 0 and len(y) > 0:
                     return X, y
