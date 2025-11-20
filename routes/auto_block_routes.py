@@ -598,12 +598,23 @@ def create_auto_block_blueprint(db_manager, auto_blocker):
             # Convertir a diccionarios
             predictions_data = []
             for pred in predictions:
+                # Calcular severidad basada en threat_score
+                threat_score = pred.threat_score or 0
+                if threat_score >= 90:
+                    severity = 'critical'
+                elif threat_score >= 70:
+                    severity = 'high'
+                elif threat_score >= 50:
+                    severity = 'medium'
+                else:
+                    severity = 'low'
+
                 predictions_data.append({
                     'ip_address': pred.ip_address,
                     'ml_confidence': pred.ml_confidence,
-                    'threat_score': pred.threat_score,
-                    'severity': pred.severity,
-                    'event_count': pred.event_count,
+                    'threat_score': threat_score,
+                    'severity': severity,
+                    'event_count': pred.total_events or 0,
                     'first_seen': pred.first_seen,
                     'last_seen': pred.last_seen
                 })
