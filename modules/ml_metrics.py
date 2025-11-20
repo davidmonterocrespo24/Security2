@@ -186,12 +186,16 @@ class MLMetrics:
                     # Reordenar columnas en el mismo orden que el modelo
                     df_numeric = df_numeric[expected_features]
 
-                X = df_numeric.values
                 y = np.array(labels)
 
-                # Aplicar el scaler si existe
+                # Aplicar el scaler si existe (con DataFrame para mantener nombres)
                 if self.ml_detector.scaler:
-                    X = self.ml_detector.scaler.transform(X)
+                    X = self.ml_detector.scaler.transform(df_numeric)
+                else:
+                    X = df_numeric.values
+
+                print(f"  [INFO] Features extraídas: {len(X)} muestras, {X.shape[1]} características")
+                print(f"  [INFO] Labels: {len(y)} ({np.sum(y)} maliciosas, {len(y) - np.sum(y)} normales)")
 
                 if len(X) > 0 and len(y) > 0:
                     return X, y
