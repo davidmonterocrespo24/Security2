@@ -864,6 +864,20 @@ class MLTrafficDetector:
                 print(f"   {idx}. {ip_info['ip_address']} - Score: {score}/100 {action}")
                 print(f"      ML: {ip_info['ml_confidence']*100:.1f}% | Eventos: {ip_info['total_events']} | {ip_info.get('requests_per_minute', 0):.1f} req/min")
 
+    def _get_model_version(self):
+        """Obtener versión del modelo desde metadata"""
+        try:
+            metadata_path = os.path.join(self.model_path, 'model_metadata.json')
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                return metadata.get('model_version', 'v1.0.0')
+            else:
+                # Si no existe metadata, es un modelo antiguo
+                return 'v1.0.0 (legacy)'
+        except Exception as e:
+            return 'unknown'
+
     def save_model(self):
         """Guardar modelo entrenado"""
         try:
@@ -883,7 +897,19 @@ class MLTrafficDetector:
             with open(os.path.join(self.model_path, 'feature_names.json'), 'w') as f:
                 json.dump(self.feature_names, f)
 
+            # Guardar metadata del modelo con versión
+            metadata = {
+                'model_version': 'v1.0.0',
+                'trained_at': datetime.now().isoformat(),
+                'features_count': len(self.feature_names),
+                'model_type': 'Random Forest Classifier',
+                'n_estimators': self.model.n_estimators
+            }
+            with open(os.path.join(self.model_path, 'model_metadata.json'), 'w') as f:
+                json.dump(metadata, f, indent=2)
+
             print(f"\nModelo guardado en: {self.model_path}")
+            print(f"Versión: {metadata['model_version']}")
             return True
         except Exception as e:
             print(f"Error guardando modelo: {e}")
@@ -925,6 +951,7 @@ class MLTrafficDetector:
         if self.model is None:
             return {
                 'is_trained': False,
+                'model_version': 'unknown',
                 'message': 'Modelo no entrenado'
             }
 
@@ -934,8 +961,12 @@ class MLTrafficDetector:
             'importance': self.model.feature_importances_
         }).sort_values('importance', ascending=False)
 
+        # Obtener versión del modelo desde metadata si existe
+        model_version = self._get_model_version()
+
         return {
             'is_trained': True,
+            'model_version': model_version,
             'model_type': 'Random Forest Classifier',
             'n_estimators': self.model.n_estimators,
             'features_count': len(self.feature_names),

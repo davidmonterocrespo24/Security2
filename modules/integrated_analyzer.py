@@ -176,7 +176,18 @@ class IntegratedAnalyzer:
             severity_scores = {'critical': 50, 'high': 30, 'medium': 10, 'low': 5}
 
             for event in events:
-                country = getattr(event, 'country', None) or 'Unknown'
+                # NOTA: SecurityEvent no tiene campo 'country' - necesita implementarse
+                # Por ahora usamos geo_location si existe
+                country = 'Unknown'
+                if hasattr(event, 'geo_location') and event.geo_location:
+                    # Intentar parsear geo_location si es JSON
+                    try:
+                        import json
+                        geo = json.loads(event.geo_location) if isinstance(event.geo_location, str) else event.geo_location
+                        country = geo.get('country', 'Unknown') if isinstance(geo, dict) else 'Unknown'
+                    except:
+                        country = 'Unknown'
+
                 if not country or country == 'Unknown':
                     continue
 
@@ -405,12 +416,13 @@ class IntegratedAnalyzer:
                 SecurityEvent.timestamp >= cutoff
             ).scalar()
 
-            # Contar paises unicos
-            unique_countries = session.query(
-                func.count(func.distinct(SecurityEvent.country))
-            ).filter(
-                SecurityEvent.timestamp >= cutoff
-            ).scalar()
+            # Contar paises unicos (deshabilitado - SecurityEvent no tiene campo country)
+            # unique_countries = session.query(
+            #     func.count(func.distinct(SecurityEvent.country))
+            # ).filter(
+            #     SecurityEvent.timestamp >= cutoff
+            # ).scalar()
+            unique_countries = 0  # Por ahora devolvemos 0
 
             return {
                 'total_events': total_events,
