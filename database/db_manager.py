@@ -36,15 +36,15 @@ class DatabaseManager:
                     if not hasattr(self, '_geo_service'):
                         self._geo_service = GeoLocationService(self, use_api_fallback=True)
 
-                    geo_info = self._geo_service.get_location(source_ip)
+                    geo_info = self._geo_service.get_country_info(source_ip)
 
                     if geo_info:
                         geo_data = {
-                            'country': geo_info.country,
-                            'country_code': geo_info.country_code,
-                            'city': geo_info.city,
-                            'latitude': geo_info.latitude,
-                            'longitude': geo_info.longitude
+                            'country': geo_info.get('country_name', 'Unknown'),
+                            'country_code': geo_info.get('country_code', 'XX'),
+                            'city': geo_info.get('continent_name', 'Unknown'),
+                            'latitude': 0,  # API doesn't provide coordinates
+                            'longitude': 0
                         }
                         kwargs['geo_location'] = json.dumps(geo_data)
                 except Exception:
