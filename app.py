@@ -142,6 +142,15 @@ from routes.ml_metrics_routes import create_ml_metrics_blueprint
 ml_metrics_blueprint = create_ml_metrics_blueprint(ml_metrics)
 app.register_blueprint(ml_metrics_blueprint)
 
+# Inicializar sistema de backup de base de datos
+from modules.database_backup import DatabaseBackup
+db_backup_manager = DatabaseBackup(db_path='database/security.db')
+
+# Registrar blueprint de gestión de base de datos
+from routes.database_routes import create_database_blueprint
+database_blueprint = create_database_blueprint(db_backup_manager)
+app.register_blueprint(database_blueprint)
+
 # Iniciar worker de tareas en background
 task_scheduler.start_worker()
 
