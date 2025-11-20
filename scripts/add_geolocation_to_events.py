@@ -21,9 +21,9 @@ def add_geolocation_to_events():
     session = db.get_session()
 
     try:
-        print("="*70)
-        print("AGREGANDO GEOLOCALIZACIÓN A EVENTOS EXISTENTES")
-        print("="*70)
+        print("="*70, flush=True)
+        print("AGREGANDO GEOLOCALIZACIÓN A EVENTOS EXISTENTES", flush=True)
+        print("="*70, flush=True)
 
         # Obtener todos los eventos sin geolocalización
         events_without_geo = session.query(SecurityEvent).filter(

@@ -151,6 +151,10 @@ from routes.database_routes import create_database_blueprint
 database_blueprint = create_database_blueprint(db_backup_manager)
 app.register_blueprint(database_blueprint)
 
+# Registrar blueprint de configuración geográfica
+from routes.geo_config_routes import geo_config_bp
+app.register_blueprint(geo_config_bp)
+
 # Iniciar worker de tareas en background
 task_scheduler.start_worker()
 

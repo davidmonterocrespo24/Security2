@@ -5,7 +5,9 @@
       "Bash(git commit:*)",
       "Bash(python:*)",
       "Read(//e/home/**)",
-      "Bash(timeout 600 python scripts/add_geolocation_to_events.py)"
+      "Bash(timeout 600 python scripts/add_geolocation_to_events.py)",
+      "Bash(tasklist)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

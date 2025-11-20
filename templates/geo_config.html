@@ -1,0 +1,618 @@
+{% extends "base.html" %}
+
+{% block title %}Bloqueo Geográfico - Sistema de Seguridad{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-globe-americas"></i> Configuración de Bloqueo Geográfico</h2>
+            <p class="text-muted">Controla el tráfico permitido/bloqueado según el país de origen</p>
+        </div>
+    </div>
+
+    <!-- Estado Actual -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Estado del Filtro</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="filter-status">Cargando...</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-shield-alt fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Modo de Operación</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="mode-status">...</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-cog fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Países Configurados</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="countries-count">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-flag fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuración Principal -->
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Configuración Principal</h6>
+                </div>
+                <div class="card-body">
+                    <form id="geo-config-form">
+                        <!-- Activar/Desactivar -->
+                        <div class="form-group">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="enabled" name="enabled">
+                                <label class="custom-control-label" for="enabled">
+                                    <strong>Activar Filtrado Geográfico</strong>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                Cuando está activo, el sistema bloqueará o permitirá tráfico según el país de origen
+                            </small>
+                        </div>
+
+                        <!-- Modo de Operación -->
+                        <div class="form-group mt-4">
+                            <label for="mode"><strong>Modo de Operación</strong></label>
+                            <select class="form-control" id="mode" name="mode">
+                                <option value="whitelist">Whitelist (Solo permitir países seleccionados)</option>
+                                <option value="blacklist">Blacklist (Bloquear solo países seleccionados)</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Whitelist:</strong> Solo permite tráfico de los países en la lista. Bloquea el resto.<br>
+                                <strong>Blacklist:</strong> Solo bloquea tráfico de los países en la lista. Permite el resto.
+                            </small>
+                        </div>
+
+                        <!-- Bloquear Desconocidos -->
+                        <div class="form-group mt-4">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="block-unknown" name="block_unknown">
+                                <label class="custom-control-label" for="block-unknown">
+                                    Bloquear IPs de países desconocidos
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                IPs que no pueden ser geolocalizadas serán bloqueadas (recomendado para seguridad alta)
+                            </small>
+                        </div>
+
+                        <!-- Botón Guardar -->
+                        <div class="form-group mt-4">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                <i class="fas fa-save"></i> Guardar Configuración
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Probar IP -->
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Probar Configuración</h6>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Verifica si una IP sería bloqueada con la configuración actual</p>
+
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="test-ip" placeholder="Ej: 8.8.8.8">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-primary" type="button" id="btn-test-ip">
+                                <i class="fas fa-vial"></i> Probar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="test-result" style="display: none;">
+                        <div class="alert" role="alert" id="test-alert">
+                            <h5 id="test-title"></h5>
+                            <hr>
+                            <p id="test-details" class="mb-0"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estadísticas Rápidas -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Países más Activos</h6>
+                </div>
+                <div class="card-body" id="top-countries-container">
+                    <p class="text-muted text-center">Cargando estadísticas...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gestión de Países -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Gestión de Países</h6>
+                    <button class="btn btn-sm btn-success" id="btn-add-country">
+                        <i class="fas fa-plus"></i> Agregar País
+                    </button>
+                </div>
+                <div class="card-body">
+                    <!-- Países Seleccionados -->
+                    <div id="selected-countries-list">
+                        <p class="text-muted text-center">No hay países configurados</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas Detalladas -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Estadísticas por País (últimos 1000 eventos)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="countries-stats-table">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>País</th>
+                                    <th>Código</th>
+                                    <th>Total Eventos</th>
+                                    <th>Critical</th>
+                                    <th>High</th>
+                                    <th>Medium</th>
+                                    <th>Low</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stats-tbody">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">Cargando estadísticas...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Agregar País -->
+<div class="modal fade" id="addCountryModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Agregar País</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="country-select">Seleccionar País:</label>
+                    <select class="form-control" id="country-select">
+                        <option value="">Cargando países...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirm-add-country">Agregar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df!important;
+}
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a!important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc!important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e!important;
+}
+.country-badge {
+    display: inline-block;
+    margin: 5px;
+    padding: 10px 15px;
+    background: #f8f9fc;
+    border: 1px solid #e3e6f0;
+    border-radius: 5px;
+}
+.country-badge:hover {
+    background: #eaecf4;
+    border-color: #d1d3e2;
+}
+.country-badge .remove-btn {
+    margin-left: 10px;
+    cursor: pointer;
+    color: #e74a3b;
+}
+.country-badge .remove-btn:hover {
+    color: #be2617;
+}
+</style>
+
+<script>
+let currentConfig = {};
+let allCountries = [];
+
+// Cargar configuración al iniciar
+$(document).ready(function() {
+    loadConfig();
+    loadStatistics();
+    loadAvailableCountries();
+});
+
+// Cargar configuración actual
+function loadConfig() {
+    $.get('/geo-config/api/config', function(response) {
+        if (response.success && response.config) {
+            currentConfig = response.config;
+
+            // Actualizar formulario
+            $('#enabled').prop('checked', response.config.enabled || false);
+            $('#mode').val(response.config.mode || 'whitelist');
+            $('#block-unknown').prop('checked', response.config.block_unknown || false);
+
+            // Actualizar estados
+            updateStatusCards();
+            updateCountriesList();
+        }
+    });
+}
+
+// Actualizar tarjetas de estado
+function updateStatusCards() {
+    const enabled = currentConfig.enabled || false;
+    const mode = currentConfig.mode || 'whitelist';
+    const countries = currentConfig.countries || [];
+
+    $('#filter-status').html(enabled ?
+        '<span class="text-success"><i class="fas fa-check-circle"></i> Activo</span>' :
+        '<span class="text-danger"><i class="fas fa-times-circle"></i> Inactivo</span>'
+    );
+
+    $('#mode-status').text(mode === 'whitelist' ? 'Whitelist (Permitir)' : 'Blacklist (Bloquear)');
+    $('#countries-count').text(countries.length);
+}
+
+// Actualizar lista de países seleccionados
+function updateCountriesList() {
+    const countries = currentConfig.countries || [];
+    const container = $('#selected-countries-list');
+
+    if (countries.length === 0) {
+        container.html('<p class="text-muted text-center">No hay países configurados</p>');
+        return;
+    }
+
+    let html = '<div class="row">';
+    countries.forEach(code => {
+        const countryName = getCountryName(code);
+        html += `
+            <div class="col-md-3 mb-2">
+                <div class="country-badge">
+                    <span class="flag-icon flag-icon-${code.toLowerCase()}"></span>
+                    <strong>${code}</strong> - ${countryName}
+                    <i class="fas fa-times remove-btn" onclick="removeCountry('${code}')"></i>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+
+    container.html(html);
+}
+
+// Obtener nombre de país desde el código
+function getCountryName(code) {
+    const country = allCountries.find(c => c.code === code);
+    return country ? country.name : code;
+}
+
+// Guardar configuración
+$('#geo-config-form').submit(function(e) {
+    e.preventDefault();
+
+    const data = {
+        enabled: $('#enabled').is(':checked'),
+        mode: $('#mode').val(),
+        block_unknown: $('#block-unknown').is(':checked'),
+        countries: currentConfig.countries || []
+    };
+
+    $.ajax({
+        url: '/geo-config/api/config',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(response) {
+            if (response.success) {
+                showNotification('Configuración guardada correctamente', 'success');
+                loadConfig();
+            } else {
+                showNotification('Error: ' + response.error, 'danger');
+            }
+        },
+        error: function() {
+            showNotification('Error al guardar configuración', 'danger');
+        }
+    });
+});
+
+// Probar IP
+$('#btn-test-ip').click(function() {
+    const ip = $('#test-ip').val().trim();
+
+    if (!ip) {
+        showNotification('Ingresa una dirección IP', 'warning');
+        return;
+    }
+
+    $.ajax({
+        url: '/geo-config/api/test-ip',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ip_address: ip}),
+        success: function(response) {
+            if (response.success) {
+                const result = $('#test-result');
+                const alert = $('#test-alert');
+                const title = $('#test-title');
+                const details = $('#test-details');
+
+                if (response.is_allowed) {
+                    alert.removeClass('alert-danger').addClass('alert-success');
+                    title.html('<i class="fas fa-check-circle"></i> IP Permitida');
+                } else {
+                    alert.removeClass('alert-success').addClass('alert-danger');
+                    title.html('<i class="fas fa-ban"></i> IP Bloqueada');
+                }
+
+                let detailsHtml = `
+                    <strong>IP:</strong> ${response.ip_address}<br>
+                    <strong>País:</strong> ${response.country_info ? response.country_info.country_name : 'Desconocido'}
+                    (${response.country_info ? response.country_info.country_code : 'XX'})<br>
+                    <strong>Razón:</strong> ${response.reason}
+                `;
+
+                details.html(detailsHtml);
+                result.show();
+            } else {
+                showNotification('Error: ' + response.error, 'danger');
+            }
+        },
+        error: function() {
+            showNotification('Error al probar IP', 'danger');
+        }
+    });
+});
+
+// Cargar estadísticas
+function loadStatistics() {
+    $.get('/geo-config/api/statistics', function(response) {
+        if (response.success) {
+            updateStatsTable(response.statistics);
+            updateTopCountries(response.statistics.slice(0, 5));
+        }
+    });
+}
+
+// Actualizar tabla de estadísticas
+function updateStatsTable(stats) {
+    const tbody = $('#stats-tbody');
+
+    if (stats.length === 0) {
+        tbody.html('<tr><td colspan="8" class="text-center text-muted">No hay datos disponibles</td></tr>');
+        return;
+    }
+
+    let html = '';
+    stats.forEach(stat => {
+        html += `
+            <tr>
+                <td><span class="flag-icon flag-icon-${stat.country_code.toLowerCase()}"></span> ${stat.country}</td>
+                <td><strong>${stat.country_code}</strong></td>
+                <td><span class="badge badge-primary">${stat.total_events}</span></td>
+                <td><span class="badge badge-danger">${stat.critical}</span></td>
+                <td><span class="badge badge-warning">${stat.high}</span></td>
+                <td><span class="badge badge-info">${stat.medium}</span></td>
+                <td><span class="badge badge-secondary">${stat.low}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="addCountryFromStats('${stat.country_code}')">
+                        <i class="fas fa-plus"></i> Agregar
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.html(html);
+}
+
+// Actualizar top países
+function updateTopCountries(topStats) {
+    const container = $('#top-countries-container');
+
+    if (topStats.length === 0) {
+        container.html('<p class="text-muted text-center">No hay datos</p>');
+        return;
+    }
+
+    let html = '';
+    topStats.forEach((stat, index) => {
+        const percentage = 100; // Para la barra de progreso
+        html += `
+            <div class="mb-2">
+                <small class="font-weight-bold">${index + 1}. ${stat.country} (${stat.country_code})</small>
+                <div class="progress">
+                    <div class="progress-bar bg-primary" role="progressbar"
+                         style="width: ${(stat.total_events / topStats[0].total_events) * 100}%"
+                         aria-valuenow="${stat.total_events}" aria-valuemin="0" aria-valuemax="100">
+                        ${stat.total_events} eventos
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.html(html);
+}
+
+// Cargar países disponibles
+function loadAvailableCountries() {
+    $.get('/geo-config/api/available-countries', function(response) {
+        if (response.success) {
+            allCountries = response.countries;
+
+            let html = '<option value="">Selecciona un país...</option>';
+            response.countries.forEach(country => {
+                html += `<option value="${country.code}">${country.name} (${country.code})</option>`;
+            });
+
+            $('#country-select').html(html);
+        }
+    });
+}
+
+// Mostrar modal para agregar país
+$('#btn-add-country').click(function() {
+    $('#addCountryModal').modal('show');
+});
+
+// Confirmar agregar país
+$('#btn-confirm-add-country').click(function() {
+    const code = $('#country-select').val();
+
+    if (!code) {
+        showNotification('Selecciona un país', 'warning');
+        return;
+    }
+
+    addCountryToList(code);
+});
+
+// Agregar país a la lista
+function addCountryToList(code) {
+    if (!currentConfig.countries) {
+        currentConfig.countries = [];
+    }
+
+    if (currentConfig.countries.includes(code)) {
+        showNotification('El país ya está en la lista', 'warning');
+        return;
+    }
+
+    $.ajax({
+        url: '/geo-config/api/countries/add',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({country_code: code}),
+        success: function(response) {
+            if (response.success) {
+                showNotification('País agregado correctamente', 'success');
+                $('#addCountryModal').modal('hide');
+                loadConfig();
+            } else {
+                showNotification('Error: ' + response.error, 'danger');
+            }
+        },
+        error: function() {
+            showNotification('Error al agregar país', 'danger');
+        }
+    });
+}
+
+// Agregar país desde estadísticas
+function addCountryFromStats(code) {
+    addCountryToList(code);
+}
+
+// Remover país
+function removeCountry(code) {
+    if (!confirm(`¿Eliminar ${code} de la lista?`)) {
+        return;
+    }
+
+    $.ajax({
+        url: '/geo-config/api/countries/remove',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({country_code: code}),
+        success: function(response) {
+            if (response.success) {
+                showNotification('País removido correctamente', 'success');
+                loadConfig();
+            } else {
+                showNotification('Error: ' + response.error, 'danger');
+            }
+        },
+        error: function() {
+            showNotification('Error al remover país', 'danger');
+        }
+    });
+}
+
+// Mostrar notificación
+function showNotification(message, type) {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="close" data-dismiss="alert">
+                <span>&times;</span>
+            </button>
+        </div>
+    `;
+
+    $('body').prepend(alertHtml);
+
+    setTimeout(function() {
+        $('.alert').fadeOut();
+    }, 3000);
+}
+</script>
+{% endblock %}
