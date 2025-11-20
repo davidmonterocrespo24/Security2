@@ -415,10 +415,19 @@ function renderHistoryChart(history) {
 
 async function loadMetricDetails(metricId) {
     try {
+        console.log('[DEBUG] Cargando detalles de métrica ID:', metricId);
         const res = await fetch(`/ml-metrics/api/metrics/${metricId}`);
         const data = await res.json();
 
+        console.log('[DEBUG] Respuesta completa:', data);
+
         if (data.success && data.metric) {
+            console.log('[DEBUG] Métrica recibida:', data.metric);
+            console.log('[DEBUG] extra_data:', data.metric.extra_data);
+            console.log('[DEBUG] confusion_matrix:', data.metric.confusion_matrix);
+            console.log('[DEBUG] roc_curve_data:', data.metric.roc_curve_data);
+            console.log('[DEBUG] pr_curve_data:', data.metric.pr_curve_data);
+
             renderConfusionMatrix(data.metric);
             renderROCCurve(data.metric);
             renderPRCurve(data.metric);
@@ -429,9 +438,17 @@ async function loadMetricDetails(metricId) {
 }
 
 function renderConfusionMatrix(metric) {
+    console.log('[DEBUG renderConfusionMatrix] metric:', metric);
+    console.log('[DEBUG renderConfusionMatrix] extra_data:', metric.extra_data);
+    console.log('[DEBUG renderConfusionMatrix] confusion_matrix:', metric.confusion_matrix);
+
     const cm = metric.extra_data?.confusion_matrix_labels || metric.confusion_matrix;
 
+    console.log('[DEBUG renderConfusionMatrix] cm seleccionado:', cm);
+    console.log('[DEBUG renderConfusionMatrix] tipo de cm:', typeof cm, 'es array:', Array.isArray(cm));
+
     if (!cm || (Array.isArray(cm) && cm.length === 0)) {
+        console.log('[DEBUG renderConfusionMatrix] No hay datos - mostrando mensaje');
         document.getElementById('confusion-matrix').innerHTML = '<p class="text-gray-500">No disponible</p>';
         return;
     }
@@ -439,13 +456,18 @@ function renderConfusionMatrix(metric) {
     let tn, fp, fn, tp;
 
     if (cm.tn !== undefined) {
+        console.log('[DEBUG renderConfusionMatrix] Usando formato de objeto {tn, fp, fn, tp}');
         tn = cm.tn; fp = cm.fp; fn = cm.fn; tp = cm.tp;
     } else if (Array.isArray(cm) && cm.length === 2) {
+        console.log('[DEBUG renderConfusionMatrix] Usando formato de array [[tn, fp], [fn, tp]]');
         tn = cm[0][0]; fp = cm[0][1]; fn = cm[1][0]; tp = cm[1][1];
     } else {
+        console.log('[DEBUG renderConfusionMatrix] Formato inválido, tipo:', typeof cm);
         document.getElementById('confusion-matrix').innerHTML = '<p class="text-gray-500">Formato inválido</p>';
         return;
     }
+
+    console.log('[DEBUG renderConfusionMatrix] Valores finales: TN=', tn, 'FP=', fp, 'FN=', fn, 'TP=', tp);
 
     document.getElementById('confusion-matrix').innerHTML = `
         <div class="grid grid-cols-2 gap-4 max-w-md mx-auto">
@@ -470,11 +492,19 @@ function renderConfusionMatrix(metric) {
 }
 
 function renderROCCurve(metric) {
+    console.log('[DEBUG renderROCCurve] metric:', metric);
+    console.log('[DEBUG renderROCCurve] roc_curve_data:', metric.roc_curve_data);
+
     const roc = metric.roc_curve_data;
 
     if (!roc || !roc.fpr || !roc.tpr) {
+        console.log('[DEBUG renderROCCurve] No hay datos de ROC curve - saliendo');
+        console.log('[DEBUG renderROCCurve] roc:', roc);
+        console.log('[DEBUG renderROCCurve] roc.fpr:', roc?.fpr, 'roc.tpr:', roc?.tpr);
         return;
     }
+
+    console.log('[DEBUG renderROCCurve] Datos de ROC válidos, renderizando chart');
 
     if (charts.roc) charts.roc.destroy();
 
