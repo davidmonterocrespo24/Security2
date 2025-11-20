@@ -163,11 +163,21 @@ class MLMetrics:
             features = self.ml_detector.extract_features(events_data)
 
             # Convertir a array numpy
-            if features:
-                X = pd.DataFrame(features).select_dtypes(include=[np.number]).values
+            if features is not None and len(features) > 0:
+                # Si es lista de diccionarios, convertir a DataFrame
+                if isinstance(features, list):
+                    df_features = pd.DataFrame(features)
+                else:
+                    df_features = features
+
+                # Seleccionar solo columnas numéricas
+                X = df_features.select_dtypes(include=[np.number]).values
                 y = np.array(labels)
 
-                return X, y
+                if len(X) > 0 and len(y) > 0:
+                    return X, y
+                else:
+                    return np.array([]), np.array([])
             else:
                 return np.array([]), np.array([])
 
