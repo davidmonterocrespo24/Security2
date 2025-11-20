@@ -13,9 +13,6 @@ geo_config_bp = Blueprint('geo_config', __name__, url_prefix='/geo-config')
 @geo_config_bp.route('/')
 def index():
     """Página de configuración de bloqueo geográfico"""
-    if 'user_id' not in flask_session:
-        return redirect(url_for('login'))
-
     return render_template('geo_config.html')
 
 
