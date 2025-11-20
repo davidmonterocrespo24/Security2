@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración de Base de Datos{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-white">Configuración de Base de Datos</h1>
+            <p class="text-gray-400 mt-2">Exportar e importar base de datos completa</p>
+        </div>
+    </div>
+
+    <!-- Estadísticas de la Base de Datos Actual -->
+    <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+            <i class="fas fa-database mr-2 text-blue-400"></i>
+            Base de Datos Actual
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div class="bg-gray-700 rounded-lg p-4">
+                <p class="text-gray-400 text-sm">Tablas</p>
+                <p class="text-3xl font-bold text-white" id="current-tables">-</p>
+            </div>
+            <div class="bg-gray-700 rounded-lg p-4">
+                <p class="text-gray-400 text-sm">Registros Totales</p>
+                <p class="text-3xl font-bold text-white" id="current-records">-</p>
+            </div>
+            <div class="bg-gray-700 rounded-lg p-4">
+                <p class="text-gray-400 text-sm">Última Actualización</p>
+                <p class="text-lg font-bold text-white" id="current-updated">-</p>
+            </div>
+        </div>
+
+        <button onclick="loadDatabaseStats()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+            <i class="fas fa-sync mr-2"></i>
+            Actualizar Estadísticas
+        </button>
+    </div>
+
+    <!-- Exportar Base de Datos -->
+    <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+            <i class="fas fa-download mr-2 text-green-400"></i>
+            Exportar Base de Datos
+        </h2>
+
+        <p class="text-gray-300 mb-4">
+            Descarga un archivo ZIP con la base de datos completa. Incluye todas las tablas y registros,
+            además de un archivo de metadata con información sobre la exportación.
+        </p>
+
+        <div class="flex items-center mb-4">
+            <input type="checkbox" id="include-metadata" checked class="mr-2">
+            <label for="include-metadata" class="text-gray-300">Incluir metadata (fecha, tablas, registros)</label>
+        </div>
+
+        <button onclick="exportDatabase()" id="export-btn" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold">
+            <i class="fas fa-download mr-2"></i>
+            Descargar Base de Datos
+        </button>
+
+        <div id="export-status" class="mt-4 hidden">
+            <div class="bg-blue-900 border border-blue-500 text-blue-200 px-4 py-3 rounded">
+                <p class="font-semibold">Exportando base de datos...</p>
+            </div>
+        </div>
+
+        <div id="export-success" class="mt-4 hidden">
+            <div class="bg-green-900 border border-green-500 text-green-200 px-4 py-3 rounded">
+                <p class="font-semibold mb-2">Base de datos exportada exitosamente</p>
+                <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+                    <div>
+                        <span class="text-gray-400">Archivo:</span>
+                        <span class="text-white font-mono" id="export-filename"></span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Tamaño:</span>
+                        <span class="text-white" id="export-size"></span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Tablas:</span>
+                        <span class="text-white" id="export-tables"></span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Registros:</span>
+                        <span class="text-white" id="export-records"></span>
+                    </div>
+                </div>
+                <a href="#" id="download-link" class="inline-block px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition">
+                    <i class="fas fa-file-download mr-2"></i>
+                    Descargar Archivo
+                </a>
+            </div>
+        </div>
+
+        <div id="export-error" class="mt-4 hidden">
+            <div class="bg-red-900 border border-red-500 text-red-200 px-4 py-3 rounded">
+                <p class="font-semibold">Error al exportar base de datos</p>
+                <p class="text-sm mt-1" id="export-error-msg"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Importar Base de Datos -->
+    <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+            <i class="fas fa-upload mr-2 text-yellow-400"></i>
+            Importar Base de Datos
+        </h2>
+
+        <div class="bg-yellow-900 border border-yellow-500 text-yellow-200 px-4 py-3 rounded mb-4">
+            <p class="font-semibold flex items-center">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                Advertencia
+            </p>
+            <p class="text-sm mt-1">
+                Esta operación reemplazará completamente la base de datos actual. Se creará un backup automático
+                de la base de datos actual antes de importar. Asegúrate de que el archivo ZIP sea válido.
+            </p>
+        </div>
+
+        <p class="text-gray-300 mb-4">
+            Sube un archivo ZIP de backup para restaurar la base de datos. El sistema creará automáticamente
+            un backup de la base de datos actual antes de importar.
+        </p>
+
+        <div class="flex items-center mb-4">
+            <input type="checkbox" id="backup-current" checked class="mr-2">
+            <label for="backup-current" class="text-gray-300">Crear backup de la base de datos actual antes de importar</label>
+        </div>
+
+        <div class="mb-4">
+            <label for="import-file" class="block text-gray-300 mb-2">Seleccionar archivo de backup (ZIP)</label>
+            <input type="file" id="import-file" accept=".zip" class="block w-full text-gray-300 bg-gray-700 border border-gray-600 rounded px-3 py-2">
+        </div>
+
+        <button onclick="importDatabase()" id="import-btn" class="px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-semibold">
+            <i class="fas fa-upload mr-2"></i>
+            Importar Base de Datos
+        </button>
+
+        <div id="import-status" class="mt-4 hidden">
+            <div class="bg-blue-900 border border-blue-500 text-blue-200 px-4 py-3 rounded">
+                <p class="font-semibold">Importando base de datos...</p>
+                <p class="text-sm mt-1">Este proceso puede tardar varios segundos. Por favor espera...</p>
+            </div>
+        </div>
+
+        <div id="import-success" class="mt-4 hidden">
+            <div class="bg-green-900 border border-green-500 text-green-200 px-4 py-3 rounded">
+                <p class="font-semibold mb-2">Base de datos importada exitosamente</p>
+                <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+                    <div>
+                        <span class="text-gray-400">Tablas importadas:</span>
+                        <span class="text-white" id="import-tables"></span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Registros importados:</span>
+                        <span class="text-white" id="import-records"></span>
+                    </div>
+                    <div class="col-span-2">
+                        <span class="text-gray-400">Backup creado:</span>
+                        <span class="text-white font-mono text-sm" id="import-backup"></span>
+                    </div>
+                </div>
+                <button onclick="location.reload()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition">
+                    <i class="fas fa-sync mr-2"></i>
+                    Recargar Página
+                </button>
+            </div>
+        </div>
+
+        <div id="import-error" class="mt-4 hidden">
+            <div class="bg-red-900 border border-red-500 text-red-200 px-4 py-3 rounded">
+                <p class="font-semibold">Error al importar base de datos</p>
+                <p class="text-sm mt-1" id="import-error-msg"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Backups Disponibles -->
+    <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+        <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+            <i class="fas fa-archive mr-2 text-purple-400"></i>
+            Backups Disponibles
+        </h2>
+
+        <button onclick="loadBackupsList()" class="mb-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition">
+            <i class="fas fa-sync mr-2"></i>
+            Actualizar Lista
+        </button>
+
+        <div id="backups-list">
+            <p class="text-gray-400">Cargando backups...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variables globales
+let currentBackups = [];
+
+// Cargar estadísticas de la base de datos
+async function loadDatabaseStats() {
+    try {
+        const res = await fetch('/database/api/stats');
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById('current-tables').textContent = data.stats.tables_count || 0;
+            document.getElementById('current-records').textContent = (data.stats.total_records || 0).toLocaleString();
+            document.getElementById('current-updated').textContent = new Date().toLocaleString();
+        }
+    } catch (e) {
+        console.error('Error cargando estadísticas:', e);
+    }
+}
+
+// Exportar base de datos
+async function exportDatabase() {
+    const btn = document.getElementById('export-btn');
+    const statusDiv = document.getElementById('export-status');
+    const successDiv = document.getElementById('export-success');
+    const errorDiv = document.getElementById('export-error');
+
+    // Ocultar mensajes anteriores
+    successDiv.classList.add('hidden');
+    errorDiv.classList.add('hidden');
+
+    // Mostrar estado de carga
+    statusDiv.classList.remove('hidden');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Exportando...';
+
+    try {
+        const includeMetadata = document.getElementById('include-metadata').checked;
+
+        const res = await fetch('/database/api/export', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({include_metadata: includeMetadata})
+        });
+
+        const data = await res.json();
+
+        statusDiv.classList.add('hidden');
+
+        if (data.success) {
+            // Mostrar éxito
+            document.getElementById('export-filename').textContent = data.backup_filename;
+            document.getElementById('export-size').textContent = data.size_kb + ' KB';
+            document.getElementById('export-tables').textContent = data.tables_count;
+            document.getElementById('export-records').textContent = data.total_records.toLocaleString();
+            document.getElementById('download-link').href = data.download_url;
+
+            successDiv.classList.remove('hidden');
+
+            // Actualizar lista de backups
+            await loadBackupsList();
+        } else {
+            // Mostrar error
+            document.getElementById('export-error-msg').textContent = data.error;
+            errorDiv.classList.remove('hidden');
+        }
+    } catch (e) {
+        statusDiv.classList.add('hidden');
+        document.getElementById('export-error-msg').textContent = e.toString();
+        errorDiv.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-download mr-2"></i>Descargar Base de Datos';
+    }
+}
+
+// Importar base de datos
+async function importDatabase() {
+    const fileInput = document.getElementById('import-file');
+    const btn = document.getElementById('import-btn');
+    const statusDiv = document.getElementById('import-status');
+    const successDiv = document.getElementById('import-success');
+    const errorDiv = document.getElementById('import-error');
+
+    // Validar que se seleccionó un archivo
+    if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Por favor selecciona un archivo de backup');
+        return;
+    }
+
+    const file = fileInput.files[0];
+
+    // Validar extensión
+    if (!file.name.endsWith('.zip')) {
+        alert('El archivo debe ser un ZIP');
+        return;
+    }
+
+    // Confirmar acción
+    if (!confirm('¿Estás seguro de que deseas importar esta base de datos? La base de datos actual será reemplazada (se creará un backup automático).')) {
+        return;
+    }
+
+    // Ocultar mensajes anteriores
+    successDiv.classList.add('hidden');
+    errorDiv.classList.add('hidden');
+
+    // Mostrar estado de carga
+    statusDiv.classList.remove('hidden');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Importando...';
+
+    try {
+        const backupCurrent = document.getElementById('backup-current').checked;
+
+        // Crear FormData para enviar el archivo
+        const formData = new FormData();
+        formData.append('backup_file', file);
+
+        const res = await fetch(`/database/api/import?backup_current=${backupCurrent}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await res.json();
+
+        statusDiv.classList.add('hidden');
+
+        if (data.success) {
+            // Mostrar éxito
+            document.getElementById('import-tables').textContent = data.tables_count;
+            document.getElementById('import-records').textContent = data.total_records.toLocaleString();
+            document.getElementById('import-backup').textContent = data.backup_file || 'No creado';
+
+            successDiv.classList.remove('hidden');
+
+            // Limpiar input de archivo
+            fileInput.value = '';
+
+            // Actualizar estadísticas
+            await loadDatabaseStats();
+            await loadBackupsList();
+        } else {
+            // Mostrar error
+            document.getElementById('import-error-msg').textContent = data.error;
+            errorDiv.classList.remove('hidden');
+        }
+    } catch (e) {
+        statusDiv.classList.add('hidden');
+        document.getElementById('import-error-msg').textContent = e.toString();
+        errorDiv.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload mr-2"></i>Importar Base de Datos';
+    }
+}
+
+// Cargar lista de backups
+async function loadBackupsList() {
+    const container = document.getElementById('backups-list');
+
+    try {
+        const res = await fetch('/database/api/backups');
+        const data = await res.json();
+
+        if (data.success && data.backups.length > 0) {
+            currentBackups = data.backups;
+
+            let html = '<div class="overflow-x-auto">';
+            html += '<table class="w-full">';
+            html += '<thead class="bg-gray-700">';
+            html += '<tr>';
+            html += '<th class="px-4 py-2 text-left text-white">Archivo</th>';
+            html += '<th class="px-4 py-2 text-left text-white">Tamaño</th>';
+            html += '<th class="px-4 py-2 text-left text-white">Fecha Creación</th>';
+            html += '<th class="px-4 py-2 text-left text-white">Tablas</th>';
+            html += '<th class="px-4 py-2 text-left text-white">Registros</th>';
+            html += '<th class="px-4 py-2 text-left text-white">Acciones</th>';
+            html += '</tr>';
+            html += '</thead>';
+            html += '<tbody>';
+
+            data.backups.forEach((backup, idx) => {
+                html += '<tr class="border-t border-gray-700 hover:bg-gray-700">';
+                html += `<td class="px-4 py-3 text-gray-300 font-mono text-sm">${backup.filename}</td>`;
+                html += `<td class="px-4 py-3 text-gray-300">${backup.size_kb} KB</td>`;
+                html += `<td class="px-4 py-3 text-gray-300">${new Date(backup.created_at).toLocaleString()}</td>`;
+                html += `<td class="px-4 py-3 text-gray-300">${backup.metadata?.tables_count || '-'}</td>`;
+                html += `<td class="px-4 py-3 text-gray-300">${backup.metadata?.total_records?.toLocaleString() || '-'}</td>`;
+                html += '<td class="px-4 py-3">';
+                html += `<a href="${backup.download_url}" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-sm mr-2">`;
+                html += '<i class="fas fa-download mr-1"></i>Descargar</a>';
+                html += `<button onclick="deleteBackup('${backup.filename}')" class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition text-sm">`;
+                html += '<i class="fas fa-trash mr-1"></i>Eliminar</button>';
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody>';
+            html += '</table>';
+            html += '</div>';
+
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<p class="text-gray-400">No hay backups disponibles</p>';
+        }
+    } catch (e) {
+        console.error('Error cargando backups:', e);
+        container.innerHTML = '<p class="text-red-400">Error cargando backups</p>';
+    }
+}
+
+// Eliminar backup
+async function deleteBackup(filename) {
+    if (!confirm(`¿Estás seguro de que deseas eliminar el backup "${filename}"?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/database/api/backups/${filename}`, {
+            method: 'DELETE'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            alert('Backup eliminado exitosamente');
+            await loadBackupsList();
+        } else {
+            alert('Error al eliminar backup: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error al eliminar backup: ' + e.toString());
+    }
+}
+
+// Cargar al iniciar la página
+document.addEventListener('DOMContentLoaded', () => {
+    loadDatabaseStats();
+    loadBackupsList();
+});
+</script>
+{% endblock %}
