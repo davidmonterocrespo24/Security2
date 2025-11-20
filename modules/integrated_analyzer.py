@@ -392,11 +392,15 @@ class IntegratedAnalyzer:
             severity_counts = {s[0].upper(): s[1] for s in severities}
 
             # Contar por tipo
+            # ML: eventos de tipo http_attack y otros con severity critical/high
             ml_count = session.query(SecurityEvent).filter(
-                SecurityEvent.timestamp >= cutoff,
-                SecurityEvent.event_type.like('%ml_%')
+                and_(
+                    SecurityEvent.timestamp >= cutoff,
+                    SecurityEvent.event_type.in_(['http_attack', 'suspicious_traffic', 'ml_detection'])
+                )
             ).count()
 
+            # Zeek: eventos de tipo zeek específicos
             zeek_count = session.query(SecurityEvent).filter(
                 and_(
                     SecurityEvent.timestamp >= cutoff,
@@ -404,9 +408,12 @@ class IntegratedAnalyzer:
                 )
             ).count()
 
+            # Fail2ban: eventos con 'ban' en el nombre
             fail2ban_count = session.query(SecurityEvent).filter(
-                SecurityEvent.timestamp >= cutoff,
-                SecurityEvent.event_type.like('%ban%')
+                and_(
+                    SecurityEvent.timestamp >= cutoff,
+                    SecurityEvent.event_type.like('%ban%')
+                )
             ).count()
 
             # Contar IPs unicas
