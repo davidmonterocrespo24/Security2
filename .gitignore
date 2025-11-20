@@ -42,3 +42,4 @@ logs/
 # Config
 config.json
 .history/*
+models/*
